@@ -1,0 +1,4 @@
+# Synthetic workspace for exercising actual reusable workflows.
+[workspace]
+members = ["fixtures/reusable/lib", "fixtures/reusable/cli", "fixtures/reusable/service"]
+resolver = "2"

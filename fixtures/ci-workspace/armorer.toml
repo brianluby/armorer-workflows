@@ -1,0 +1,39 @@
+schema_version = 1
+repository = "brianluby/armorer-workflows"
+toolchain = "1.95.0"
+manifest = "Cargo.toml"
+
+[policy]
+license_file = "LICENSE"
+attestations = "required"
+
+[feature_sets.minimal]
+default_features = false
+features = []
+
+[feature_sets.json]
+default_features = false
+features = ["json"]
+
+[[deliverables]]
+id = "fixture-library"
+profile = "library"
+package = "fixture-library"
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
+feature_set = "minimal"
+
+[[deliverables]]
+id = "fixture-cli"
+profile = "cli"
+package = "fixture-cli"
+binary = "fixture-cli"
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
+feature_set = "minimal"
+
+[[deliverables]]
+id = "fixture-service"
+profile = "service"
+package = "fixture-service"
+binary = "fixture-service"
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
+feature_set = "json"

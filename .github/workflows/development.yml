@@ -1,0 +1,70 @@
+name: Workflow runtime validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install exact fixture compiler
+        run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
+      - name: Install reviewed native audit tools
+        env:
+          TOOL_DIRECTORY: ${{ runner.temp }}/armorer-native-tools
+        run: |
+          python3 -I - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          from armorer_runtime.tools import install_tools
+          install_tools(Path(os.environ["TOOL_DIRECTORY"]), ["cargo-deny", "actionlint", "zizmor", "gitleaks"])
+          PY
+      - name: Boundary tests and real native policy failures
+        env:
+          ARMORER_TEST_TOOLS: ${{ runner.temp }}/armorer-native-tools
+          ARMORER_TEST_NETWORK: "1"
+        run: |
+          python3 -I - <<'PY'
+          import sys, unittest
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          suite = unittest.defaultTestLoader.discover("tests", pattern="tests_*.py")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          raise SystemExit(0 if result.wasSuccessful() else 1)
+          PY
+      - name: Audit this repository's workflows without caller suppressions
+        env:
+          TOOL_DIRECTORY: ${{ runner.temp }}/armorer-native-tools
+        run: |
+          python3 -I - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          from armorer_runtime.ci import scan_workflows
+          root = Path.cwd()
+          tools = {name: Path(os.environ["TOOL_DIRECTORY"]) / name for name in ("actionlint", "zizmor")}
+          scan_workflows(root, tools)
+          PY
+      - name: Check Python syntax and fixture formatting
+        run: |
+          python3 -m compileall -q armorer_runtime tests
+          cargo +1.95.0 fmt --manifest-path fixtures/ci-workspace/Cargo.toml --all -- --check
