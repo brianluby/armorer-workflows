@@ -247,7 +247,7 @@ def validate_sbom(data: bytes, expected_name: str, expected_version: str, expect
     """Check semantic identities before the independent offline schema validator."""
     bom = parse_json(data)
     if not isinstance(bom, dict) or bom.get("bomFormat") != "CycloneDX" or bom.get("specVersion") != "1.5":
-        raise BuildError("unexpected SBOM format or predicate version")
+        raise BuildError("unexpected SBOM format or specification version")
     metadata = bom.get("metadata")
     if not isinstance(metadata, dict) or not isinstance(metadata.get("component"), dict):
         raise BuildError("missing SBOM root component")
