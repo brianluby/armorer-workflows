@@ -14,3 +14,8 @@ workflows by reviewed full commit SHA; no release/version is published yet.
 Native fixtures and failure tests cover advisory outages/expiry/staleness,
 denied licenses, secret-scan suppression, unsafe triggers, tampered tool bytes,
 path/archive escapes, and lingering build-script descendants.
+
+The experimental [Rust builder](.github/workflows/rust-build.yml) produces
+unsigned executables or Cargo source packages with target/feature-specific
+CycloneDX SBOMs and exact byte inventories. Read [builder scope and verification
+limits](docs/build.md); signing, attestations and publication are later gates.
