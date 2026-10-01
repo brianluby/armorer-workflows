@@ -1,17 +1,13 @@
 """CI policy failures, scanner suppression and exact feature commands."""
 
 from datetime import date
-import io
-import json
 import os
 from pathlib import Path
-import subprocess
 import tempfile
 import shutil
 import time
 import tomllib
 import unittest
-from unittest.mock import patch
 
 from armorer_runtime import ci, common, tools
 

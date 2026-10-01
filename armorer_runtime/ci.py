@@ -148,10 +148,10 @@ def scan_secrets(root: Path, binary: Path, scratch: Path, runner=common.run) -> 
             "--ignore-gitleaks-allow", "--redact=100", "--no-banner", "--no-color", "--timeout", "120"], cwd=scratch)
 
 
-def cargo_commands(case: dict, has_library: bool) -> list[list[str]]:
+def cargo_commands(case: dict, has_doctests: bool) -> list[list[str]]:
     flags = ["--locked", "--package", case["package"], "--target", case["target"], *common.cargo_flags(case)]
     commands = [["cargo", "test", *flags, "--all-targets"]]
-    if has_library:
+    if has_doctests:
         commands.append(["cargo", "test", *flags, "--doc"])
     commands.append(["cargo", "clippy", *flags, "--all-targets", "--", "-D", "warnings"])
     return commands
@@ -213,8 +213,8 @@ def main() -> int:
                 print("Armorer CI stage: " + stage, flush=True)
                 function()
             package = next(p for p in project.plan["workspace"]["packages"] if p["name"] == case["package"])
-            has_library = has_doctest_target(package)
-            for command in cargo_commands(case, has_library):
+            has_doctests = has_doctest_target(package)
+            for command in cargo_commands(case, has_doctests):
                 print("Armorer CI stage: " + command[1], flush=True)
                 common.run(command, cwd=project.root, env=env)
             print("Armorer CI case verified; no release or provenance claim.", flush=True)
