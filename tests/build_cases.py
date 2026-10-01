@@ -34,9 +34,9 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 [features]
-extra = ["dep:extra"]
+extra = ["dep:fixture-extra"]
 [dependencies]
-extra = { package = "fixture-extra", path = "../extra", optional = true }
+fixture-extra = { path = "../extra", optional = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 platform = { package = "fixture-platform", path = "../platform" }
 [[bin]]
@@ -45,13 +45,13 @@ path = "src/main.rs"
 ''',
         "app/src/main.rs": '''fn main() {
     #[cfg(feature = "extra")]
-    println!("{}", extra::value());
+    println!("{}", custom_extra::value());
     #[cfg(target_os = "macos")]
     println!("{}", platform::value());
     println!("Armorer fixture");
 }
 ''',
-        "extra/Cargo.toml": '[package]\nname="fixture-extra"\nversion="0.1.0"\nedition="2024"\nlicense="MIT"\n',
+        "extra/Cargo.toml": '[package]\nname="fixture-extra"\nversion="0.1.0"\nedition="2024"\nlicense="MIT"\n[lib]\nname="custom_extra"\n',
         "extra/src/lib.rs": "pub fn value() -> u8 { 7 }\n",
         "platform/Cargo.toml": '[package]\nname="fixture-platform"\nversion="0.1.0"\nedition="2024"\nlicense="MIT"\n',
         "platform/src/lib.rs": "pub fn value() -> u8 { 9 }\n",
@@ -174,6 +174,7 @@ def main() -> None:
                 expected_metadata = {"packages": [{"id": c["bom-ref"], "name": c["name"], "version": c["version"],
                                                      "targets": [{"name": c["name"]}] if c["bom-ref"] == root_reference else []} for c in components],
                                      "resolve": {"root": root_reference, "nodes": [{"id": n["ref"], "dependencies": n.get("dependsOn", [])} for n in extra["dependencies"]]}}
+                build.validate_sbom(json.dumps(extra).encode(), "fixture-app", "0.1.0", expected_ids, expected_metadata)
                 for mutation in ("root", "version", "edge", "root-reference"):
                     changed = copy.deepcopy(extra)
                     if mutation == "root":

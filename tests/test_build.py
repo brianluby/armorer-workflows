@@ -103,6 +103,26 @@ class GraphTests(unittest.TestCase):
         self.assertEqual([p["id"] for p in result["packages"]], ["app", "dep"])
         self.assertEqual(result["resolve"]["nodes"][0]["dependencies"], ["dep"])
 
+    def test_custom_dependency_library_name_uses_package_and_declaration_key(self):
+        for rename in (None, "renamed-dep"):
+            for optional in (False, True):
+                with self.subTest(rename=rename, optional=optional):
+                    document = graph()
+                    declaration = document["packages"][0]["dependencies"][0]
+                    declaration.update(rename=rename, optional=optional)
+                    key = rename or declaration["name"]
+                    document["packages"][0]["features"] = {"extra": ["dep:" + key]}
+                    document["packages"][1]["targets"] = [{"name": "custom_library", "kind": ["lib"]}]
+                    edge = document["resolve"]["nodes"][0]["deps"][0]
+                    edge["name"] = rename.replace("-", "_") if rename else "custom_library"
+                    result = reconcile_metadata(document, evidence({"app": ["extra"], "dep": []}),
+                                                case(features=["extra"]))
+                    self.assertEqual(result["resolve"]["nodes"][0]["dependencies"], ["dep"])
+                    self.assertEqual(result["resolve"]["nodes"][0]["deps"][0]["name"], edge["name"])
+                    if optional:
+                        minimal = reconcile_metadata(document, evidence(), case())
+                        self.assertEqual(minimal["resolve"]["nodes"][0]["dependencies"], [])
+
     def test_same_named_explicit_feature_does_not_activate_optional_dependency(self):
         document = graph()
         document["packages"][0]["features"]["optional-dep"] = []

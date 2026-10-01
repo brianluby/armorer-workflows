@@ -170,7 +170,7 @@ def _optional_dependencies(package: dict, features: set[str]) -> set[str]:
             elif edge == feature and any(d.get("optional") and (d.get("rename") or d["name"]) == edge
                                           for d in package.get("dependencies", [])):
                 active.add(edge)  # Compatibility with legacy implicit feature maps.
-    return {x.replace("-", "_") for x in active}
+    return active  # Feature edges use declaration keys, not library target names.
 
 
 def reconcile_metadata(metadata: dict, evidence: dict, selection: dict) -> dict:
@@ -204,17 +204,20 @@ def reconcile_metadata(metadata: dict, evidence: dict, selection: dict) -> dict:
         dependencies = []
         for dependency in node.get("deps", []):
             name = dependency["name"].replace("-", "_")
+            dependency_package = packages.get(dependency["pkg"], {})
             kinds = []
             for kind in dependency.get("dep_kinds", []):
                 if kind.get("kind") == "dev":
                     continue
                 declarations = [d for d in package.get("dependencies", [])
-                                if (d.get("rename") or d["name"]).replace("-", "_") == name
+                                if d["name"] == dependency_package.get("name")
+                                and (not d.get("rename") or d["rename"].replace("-", "_") == name)
                                 and d.get("kind") == kind.get("kind")
                                 and d.get("target") == kind.get("target")]
                 if not declarations:
                     raise BuildError("dependency edge has no unambiguous declaration")
-                enabled = [not d.get("optional", False) or name in active_optional for d in declarations]
+                enabled = [not d.get("optional", False) or (d.get("rename") or d["name"]) in active_optional
+                           for d in declarations]
                 if len(set(enabled)) != 1:
                     raise BuildError("ambiguous dependency activation")
                 if enabled[0]:
