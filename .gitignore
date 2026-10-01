@@ -1,0 +1,6 @@
+.veans.yml
+.worktrees/
+__pycache__/
+*.pyc
+.venv/
+target/
