@@ -15,4 +15,4 @@ concurrency:
 
 jobs:
   reusable:
-    uses: brianluby/armorer-workflows/.github/workflows/rust-build.yml@ceac9c104c99345d477910d0225acc204af3459c
+    uses: brianluby/armorer-workflows/.github/workflows/rust-build.yml@5921c5de8edf14a7542f92bb0e79dec0dc227b16
