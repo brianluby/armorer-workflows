@@ -1,0 +1,40 @@
+# Synthetic CI rehearsal only; not a release-readiness claim.
+schema_version = 1
+repository = "brianluby/armorer-workflows"
+toolchain = "1.95.0"
+manifest = "Cargo.toml"
+
+[policy]
+license_file = "LICENSE"
+attestations = "required"
+
+[feature_sets.minimal]
+default_features = false
+features = []
+
+[feature_sets.json]
+default_features = false
+features = ["json"]
+
+[[deliverables]]
+id = "rehearsal-library"
+profile = "library"
+package = "rehearsal-library"
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
+feature_set = "minimal"
+
+[[deliverables]]
+id = "rehearsal-cli"
+profile = "cli"
+package = "rehearsal-cli"
+binary = "rehearsal-cli"
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
+feature_set = "minimal"
+
+[[deliverables]]
+id = "rehearsal-service"
+profile = "service"
+package = "rehearsal-service"
+binary = "rehearsal-service"
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
+feature_set = "json"

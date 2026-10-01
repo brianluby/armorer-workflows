@@ -1,0 +1,10 @@
+schema_version = 1
+[licenses]
+allow = ["MIT", "Apache-2.0"]
+[advisories]
+exceptions = []
+[sources]
+allow_git = []
+[bans]
+multiple_versions = "warn"
+deny = []

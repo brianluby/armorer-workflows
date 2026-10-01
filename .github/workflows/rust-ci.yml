@@ -1,0 +1,163 @@
+name: Armorer Rust CI
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Validate trusted workflow identity and trigger
+        id: trusted
+        env:
+          JOB_CONTEXT: ${{ toJSON(job) }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, re
+          context = json.loads(os.environ["JOB_CONTEXT"])
+          assert context.get("workflow_repository") == "brianluby/armorer-workflows", "Unsupported workflow source"
+          sha = context.get("workflow_sha", "")
+          assert re.fullmatch(r"[0-9a-f]{40}", sha), "Missing immutable reusable workflow source identity"
+          assert os.environ["EVENT_NAME"] in ("pull_request", "push", "workflow_dispatch"), "Unsupported trigger"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("sha=" + sha + "\n")
+          PY
+      - name: Checkout trusted runtime at the executing workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer-workflows
+          ref: ${{ steps.trusted.outputs.sha }}
+          path: runtime-source
+          persist-credentials: false
+      - name: Checkout pinned trusted intent validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer
+          ref: 1615339b6415afa9bb9d65e2c37304e977158c4e
+          path: validator-source
+          persist-credentials: false
+      - name: Build trusted validator outside caller source
+        working-directory: runtime-source
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          from armorer_runtime import common
+          scratch = Path(os.environ["RUNNER_SCRATCH"])
+          home = scratch / "armorer-validator-home"
+          home.mkdir()
+          common.run(["rustup", "toolchain", "install", "1.95.0", "--profile", "minimal"], cwd=Path.cwd())
+          env = common.cargo_environment("1.95.0", home, scratch / "armorer-validator-target")
+          common.run(["cargo", "build", "--locked", "--manifest-path", str(Path.cwd().parent / "validator-source" / "Cargo.toml")], cwd=Path.cwd(), env=env)
+          PY
+      - name: Checkout caller source without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+      - name: Derive validated matrix and project policy
+        id: matrix
+        working-directory: runtime-source
+        env:
+          ROOT_PATH: ${{ github.workspace }}/source
+          ARMORER_PATH: ${{ runner.temp }}/armorer-validator-target/debug/armorer
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 -I - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          from armorer_runtime.ci import main
+          sys.argv = ["ci", "matrix", "--root", os.environ["ROOT_PATH"], "--armorer", os.environ["ARMORER_PATH"], "--output", os.environ["GITHUB_OUTPUT"]]
+          raise SystemExit(main())
+          PY
+
+  verify:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - name: Validate trusted workflow identity and trigger
+        id: trusted
+        env:
+          JOB_CONTEXT: ${{ toJSON(job) }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, re
+          context = json.loads(os.environ["JOB_CONTEXT"])
+          assert context.get("workflow_repository") == "brianluby/armorer-workflows", "Unsupported workflow source"
+          sha = context.get("workflow_sha", "")
+          assert re.fullmatch(r"[0-9a-f]{40}", sha), "Missing immutable reusable workflow source identity"
+          assert os.environ["EVENT_NAME"] in ("pull_request", "push", "workflow_dispatch"), "Unsupported trigger"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("sha=" + sha + "\n")
+          PY
+      - name: Checkout trusted runtime at the executing workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer-workflows
+          ref: ${{ steps.trusted.outputs.sha }}
+          path: runtime-source
+          persist-credentials: false
+      - name: Checkout pinned trusted intent validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer
+          ref: 1615339b6415afa9bb9d65e2c37304e977158c4e
+          path: validator-source
+          persist-credentials: false
+      - name: Build trusted validator outside caller source
+        working-directory: runtime-source
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          from armorer_runtime import common
+          scratch = Path(os.environ["RUNNER_SCRATCH"])
+          home = scratch / "armorer-validator-home"
+          home.mkdir()
+          common.run(["rustup", "toolchain", "install", "1.95.0", "--profile", "minimal"], cwd=Path.cwd())
+          env = common.cargo_environment("1.95.0", home, scratch / "armorer-validator-target")
+          common.run(["cargo", "build", "--locked", "--manifest-path", str(Path.cwd().parent / "validator-source" / "Cargo.toml")], cwd=Path.cwd(), env=env)
+          PY
+      - name: Checkout caller source without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+      - name: Rederive selection and run fixed CI gates
+        working-directory: runtime-source
+        env:
+          ROOT_PATH: ${{ github.workspace }}/source
+          ARMORER_PATH: ${{ runner.temp }}/armorer-validator-target/debug/armorer
+          ARTIFACT_ID: ${{ matrix.artifact_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 -I - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          from armorer_runtime.ci import main
+          sys.argv = ["ci", "run", "--root", os.environ["ROOT_PATH"], "--armorer", os.environ["ARMORER_PATH"], "--artifact-id", os.environ["ARTIFACT_ID"]]
+          raise SystemExit(main())
+          PY

@@ -1,0 +1,13 @@
+[package]
+name = "rehearsal-service"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[features]
+default = []
+extra = []
+json = ["dep:serde_json"]
+
+[dependencies]
+serde_json = { version = "=1.0.151", optional = true }
