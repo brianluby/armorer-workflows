@@ -146,6 +146,13 @@ output for the Rust reader's explicit interoperability test. Those receipts
 record unsigned output and synthetic fixture run 17/attempt 2. They do not
 establish platform attestation or release acceptance.
 
+The repository's synthetic rehearsal callers select the same exact candidate
+runtime commit for both v1 and v2, with the matching workflow pin in its fixture
+lock. They exercise all nine profile/target selections through the actual
+reusable workflows, with separate artifact namespaces. This is an explicit
+development-fixture pin change, not accepted adopter catalog migration. These
+jobs have read-only repository permission and produce unsigned evidence only.
+
 Failed commands terminate their Unix process group and clean temporary build
 directories. A failed attempt publishes no release. Retry in a fresh workflow
 attempt; run/attempt asset identities keep attempts distinct. Investigate a
