@@ -27,6 +27,8 @@ jobs:
           persist-credentials: false
       - name: Native Node 24 producer OIDC protocol fixtures without live token requests
         uses: brianluby/armorer-workflows/.github/actions/test-producer-oidc-v1@a67a01b07ba40ca00112808c22f4e89763f516ea
+      - name: Native Node 24 independent mapped-producer fixtures without live OIDC
+        uses: brianluby/armorer-workflows/.github/actions/test-mapped-producer-v1@c6430d3c392c85a5806af2010641c18ec6bd4112
       - name: Install exact fixture compiler
         run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
       - name: Install reviewed native audit tools
@@ -296,6 +298,18 @@ jobs:
           from controller_cases_v1 import main
           main()
           PYTHON
+      - name: Qualify fixed producer worker on the native Node 24 runtime
+        if: github.event_name == 'pull_request'
+        uses: brianluby/armorer-workflows/.github/actions/qualify-producer-worker-v1@c6430d3c392c85a5806af2010641c18ec6bd4112
+        env:
+          ARMORER_WORKFLOW_READ_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+          EXPECTED_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          EXPECTED_RUNNER_LABEL: ${{ matrix.runner }}
+          GH_DEBUG: api
+          GITHUB_TOKEN: test-only-unrelated-token
+          HTTP_PROXY: http://test-only.invalid:9
       - name: Qualify pinned native GETs with an isolated workflow read token
         env:
           ARMORER_READ_TOKEN: ${{ github.token }}
