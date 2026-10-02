@@ -166,6 +166,24 @@ jobs:
           '''
           subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "armorer-validator-target/debug/armorer"), "--tool-directory", str(scratch / "armorer-builder-v3-tools")], check=True)
           PY
+      - name: Qualify actual final payload bytes and explicit Apple executable blocks
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          scratch = Path(os.environ["RUNNER_SCRATCH"])
+          python = scratch / "armorer-schema-venv/bin/python"
+          code = '''import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from final_payload_cases_v1 import main
+          main()
+          '''
+          subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "armorer-validator-target/debug/armorer"), "--tool-directory", str(scratch / "armorer-final-payload-tools"), "--receipt-directory", str(scratch / "armorer-final-payload-receipts")], check=True)
+          PY
 
   policy-evidence:
     strategy:
