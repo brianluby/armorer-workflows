@@ -111,6 +111,9 @@ class ReportBoundaryTests(unittest.TestCase):
             policy.verify(directory, *expected, now=86399)
             with self.assertRaises(common.Failure):
                 policy.verify(directory, *expected, now=86401)
+            with mock.patch.object(policy.time, "time", side_effect=[86399, 86401]):
+                with self.assertRaises(common.Failure):
+                    policy.verify(directory, *expected)
 
     def test_every_native_scanner_requires_empty_json_findings(self):
         """A successful process alone cannot turn missing or finding-bearing data into a passing report."""

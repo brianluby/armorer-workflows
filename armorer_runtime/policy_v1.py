@@ -436,8 +436,12 @@ def verify(directory: Path, expected_context: dict, expected_selection: dict, ex
         require(len(raw) <= common.MAX_INPUT and total <= MAX_FILE and
                 pins.identity(raw) == {key: record[key] for key in ("sha256", "size")}, "advisory snapshot bytes mismatch")
     final_now = int(time.time()) if now is None else now
-    require(observation["finished_at"] <= final_now and final_now - observation["started_at"] <= 3600,
+    require(final_now >= observed_now and observation["finished_at"] <= final_now and final_now - observation["started_at"] <= 3600,
             "policy observation expired during verification")
+    final_date = datetime.fromtimestamp(final_now, timezone.utc).date()
+    require(all(final_date <= date.fromisoformat(exception["expires"])
+                for exception in expected_policy["advisories"]["exceptions"]),
+            "policy advisory exception expired during verification")
     return envelope
 
 
