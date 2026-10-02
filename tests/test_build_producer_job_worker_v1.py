@@ -198,7 +198,7 @@ class WorkerTests(unittest.TestCase):
         for gap in (False, True):
             with self.subTest(gap=gap), tempfile.TemporaryDirectory(prefix="armorer-worker-process-test-") as temporary:
                 directory = Path(temporary)
-                process = subprocess.Popen(["rtk", "proxy", sys.executable, "-I", str(root / "tests/producer_worker_process_v1.py"),
+                process = subprocess.Popen([sys.executable, "-I", str(root / "tests/producer_worker_process_v1.py"),
                                             str(root), str(directory), str(int(gap))],
                                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 try:

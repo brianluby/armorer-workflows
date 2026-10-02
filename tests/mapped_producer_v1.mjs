@@ -285,7 +285,7 @@ test('bounded native JSON rejects unsafe encodings and cancels oversized real ch
 /** A stalled child with excessive output must close and clean its scratch before failure returns. */
 test('oversized worker cancellation waits for owned child close and deletes private scratch', async function cancellation() {
   scenario.childMode = 'stall';
-  scenario.records = [Buffer.alloc(100000, 120)];
+  scenario.records = [Buffer.alloc(65537, 120)];
   await denied();
   assert.equal(scenario.requests.length, 0);
   assert.equal(scenario.children.length, 1);
