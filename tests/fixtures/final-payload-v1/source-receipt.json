@@ -1,0 +1,17 @@
+{
+  "repository": "brianluby/armorer",
+  "commit": "d5f048240db04fb40d73515e571a4028f049b973",
+  "files": {
+    "release-inventory-v1.json": {
+      "sha256": "6c87fa67a6a8603f02b76378d2da48d9c27b26d6d4a28466626b37b236651146",
+      "size": 4830,
+      "git_blob": "5b8e7a7c9519a55a457fcb8ac89faf15affbb17f"
+    },
+    "artifact-evidence-v1.json": {
+      "sha256": "d49be9a269bf6a4f532712ade6eae35d9f752f5f3e8b5aea91fed8cd53117340",
+      "size": 12804,
+      "git_blob": "e5db298dd9584659942bc4b029bdf996f9514f56"
+    }
+  },
+  "purpose": "unchanged v1 schema conformance; no signature or authority qualification"
+}

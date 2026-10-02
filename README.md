@@ -45,3 +45,9 @@ preexisting environment controls. Candidate PR qualification uses read-only
 native GitHub APIs on all three runners. Configuration and unknown or
 unsupported enforcement remain distinct; these receipts grant no signing or
 publication authority.
+
+The internal [final payload assembler](docs/final-payload-v1.md) packages exact
+Linux binaries and retains library archives in the strict consumer's fixed
+inventory layout. Native tests compare actual Cargo outputs on all three runners;
+unsigned Apple executables block before staging. A complete layout remains
+unverified until the pinned signer and independent consumer authenticate it.

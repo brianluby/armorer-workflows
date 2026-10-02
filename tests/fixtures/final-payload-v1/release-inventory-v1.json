@@ -1,0 +1,224 @@
+{
+  "$defs": {
+    "Asset": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "name": {
+          "type": "string"
+        },
+        "predicate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Predicate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "predicate_asset": {
+          "description": "The SBOM predicate must be compared with these exact published bytes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "$ref": "#/$defs/AssetRole"
+        },
+        "subjects": {
+          "description": "Exact asset names; relationships point from evidence to subjects.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "role",
+        "bytes",
+        "subjects"
+      ],
+      "type": "object"
+    },
+    "AssetRole": {
+      "enum": [
+        "distributable",
+        "cargo-sbom",
+        "cargo-graph",
+        "native-sbom",
+        "embedded-metadata",
+        "diagnostic",
+        "rebuild-evidence",
+        "build-evidence",
+        "package-evidence",
+        "transformation-evidence",
+        "attestation-bundle"
+      ],
+      "type": "string"
+    },
+    "ByteIdentity": {
+      "additionalProperties": false,
+      "description": "An exact byte identity, independent of a filename or producer claim.",
+      "properties": {
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "maximum": 1073741824,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "InputIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "cargo_lock_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "config_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "lock_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "run": {
+          "$ref": "#/$defs/RunIdentity"
+        },
+        "runtime": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "runtime_version": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        }
+      },
+      "required": [
+        "source",
+        "config_sha256",
+        "lock_sha256",
+        "cargo_lock_sha256",
+        "runtime",
+        "runtime_version",
+        "run"
+      ],
+      "type": "object"
+    },
+    "Predicate": {
+      "enum": [
+        "https://slsa.dev/provenance/v1",
+        "https://cyclonedx.org/bom"
+      ],
+      "type": "string"
+    },
+    "RunIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "id": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workflow": {
+          "$ref": "#/$defs/WorkflowIdentity"
+        }
+      },
+      "required": [
+        "id",
+        "attempt",
+        "workflow"
+      ],
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "git_ref": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "commit",
+        "git_ref"
+      ],
+      "type": "object"
+    },
+    "WorkflowIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "path",
+        "commit"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "assets": {
+      "items": {
+        "$ref": "#/$defs/Asset"
+      },
+      "type": "array"
+    },
+    "inputs": {
+      "$ref": "#/$defs/InputIdentity"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "inputs",
+    "assets"
+  ],
+  "title": "ReleaseInventory",
+  "type": "object"
+}
