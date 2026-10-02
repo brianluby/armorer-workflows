@@ -1,0 +1,55 @@
+name: Unsigned combined producer handoff rehearsal
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: brianluby/armorer-workflows/.github/workflows/rust-build-v3.yml@59a2e782150abff3f995682013d514e6865d8dfb
+
+  policy:
+    uses: brianluby/armorer-workflows/.github/workflows/rust-policy-v1.yml@59a2e782150abff3f995682013d514e6865d8dfb
+
+  collect:
+    needs: [build, policy]
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact rehearsal source without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+      - name: Read independently pinned builder runtime bytes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer-workflows
+          ref: 59a2e782150abff3f995682013d514e6865d8dfb
+          path: producer-runtime
+          persist-credentials: false
+      - name: Qualify actual complete build-policy archives and uploader bindings
+        uses: brianluby/armorer-workflows/.github/actions/qualify-combined-handoff-v1@8d83ec0449e64c6c11aaf395f04ac7b196e298c8
+        env:
+          ARMORER_WORKFLOW_READ_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_BRANCH: ${{ github.head_ref || github.ref_name }}
+          EXPECTED_RUNNER_LABEL: ${{ matrix.runner }}
