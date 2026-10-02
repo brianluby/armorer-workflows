@@ -1,0 +1,5 @@
+name: Test mapped producer v1 protocol
+description: Run synthetic native RSA and isolated worker fixtures without live OIDC or release authority
+runs:
+  using: node24
+  main: index.mjs

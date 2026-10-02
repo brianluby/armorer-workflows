@@ -33,6 +33,12 @@ gates remain incomplete.
 
 ## Current-job controller prerequisite
 
+The [mapped producer join](docs/mapped-producer-context-v1.md) derives the
+issuer's check-run expectation from independent current-job observations and
+rereads source/job prerequisites after verification. Private identity proof
+does not grant protection, signing or publication authority; live producer and
+complete release-controller acceptance remain pending.
+
 The [versioned controller observer](docs/controller-context-v1.md) independently
 maps one active job to its separate check-run identity and observes exact
 preexisting environment controls. Candidate PR qualification uses read-only
