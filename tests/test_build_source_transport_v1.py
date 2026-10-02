@@ -180,14 +180,19 @@ class SourceControlTests(unittest.TestCase):
     def test_final_reread_and_clock_expiry_reject_changed_mutable_prerequisites(self):
         """Reruns, actor revocation, ref/default movement and expiry during collection invalidate the checkpoint."""
         intent, _ = fixture()
-        for case in ("permission", "rerun", "freshness"):
+        for case in ("permission", "rerun", "freshness", "snapshot_start", "final_start"):
             api = source.SourceGhApi(Path("/inert"), "test-only-token")
             first = {"run_started_at": 100, "test_only": "before"}
             second = dict(first)
             if case == "permission": second["test_only"] = "revoked"
+            if case == "snapshot_start": second["run_started_at"] = 101
             _, responses = fixture()
             if case == "rerun": responses["repos/owner/repo/actions/runs/17"]["run_attempt"] = 2
+            if case == "final_start": responses["repos/owner/repo/actions/runs/17"]["run_started_at"] = timestamp(101)
+            message = "final attempt changed" if case == "final_start" else "mutable prerequisites changed or expired" if case in (
+                "permission", "freshness", "snapshot_start") else "run or source mismatch"
             with mock.patch.object(source, "_snapshot", side_effect=[first, second]), \
-                 mock.patch.object(api, "json", side_effect=lambda route: responses[route]), \
-                 mock.patch.object(source.time, "time", return_value=4000 if case == "freshness" else 120), self.assertRaises(Failure):
+                 mock.patch.object(api, "json", side_effect=lambda route: responses[route]) as read, \
+                 mock.patch.object(source.time, "time", return_value=4000 if case == "freshness" else 120), self.assertRaisesRegex(Failure, message):
                 source.observe_source(api, intent)
+            if case == "final_start": self.assertEqual(read.call_count, 1)
