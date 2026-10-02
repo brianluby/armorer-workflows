@@ -28,7 +28,7 @@ jobs:
       - name: Native Node 24 producer OIDC protocol fixtures without live token requests
         uses: brianluby/armorer-workflows/.github/actions/test-producer-oidc-v1@a67a01b07ba40ca00112808c22f4e89763f516ea
       - name: Native Node 24 independent mapped-producer fixtures without live OIDC
-        uses: brianluby/armorer-workflows/.github/actions/test-mapped-producer-v1@c6430d3c392c85a5806af2010641c18ec6bd4112
+        uses: brianluby/armorer-workflows/.github/actions/test-mapped-producer-v1@9427f8ce06a4392bf906adb37dc9293511e55382
       - name: Install exact fixture compiler
         run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
       - name: Install reviewed native audit tools
@@ -300,7 +300,7 @@ jobs:
           PYTHON
       - name: Qualify fixed producer worker on the native Node 24 runtime
         if: github.event_name == 'pull_request'
-        uses: brianluby/armorer-workflows/.github/actions/qualify-producer-worker-v1@c6430d3c392c85a5806af2010641c18ec6bd4112
+        uses: brianluby/armorer-workflows/.github/actions/qualify-producer-worker-v1@9427f8ce06a4392bf906adb37dc9293511e55382
         env:
           ARMORER_WORKFLOW_READ_TOKEN: ${{ github.token }}
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
