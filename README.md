@@ -56,3 +56,9 @@ The internal [artifact writer reader](docs/artifact-writer-v1.md) joins the
 artifact service's uploader identity to native Actions job/check records. Its
 credential-free observations preserve the remaining producer, protection and
 release authentication gates.
+
+The [combined handoff collector](docs/combined-handoff-v1.md) checks build and
+policy artifacts as one complete same-run set. Its native rehearsal joins actual
+downloaded archive bytes to their uploader jobs across all three profiles and
+platforms. Production signing, Apple finalization and release acceptance remain
+separate gates.
