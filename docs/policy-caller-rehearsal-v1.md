@@ -5,8 +5,12 @@ unsigned rehearsal; all release and signing authority remains unavailable.
 
 The additional `rehearsal-policy-v1.yml` caller invokes `rust-policy-v1.yml` at
 `59a2e782150abff3f995682013d514e6865d8dfb`, the reviewed independent observation
-implementation. The root `armorer.lock` pins that same runtime commit. The existing
-CI and three builder rehearsals retain their separately versioned calls.
+implementation. The root `armorer.lock` pins that same runtime commit. All three
+builder callers explicitly move to that SHA because one root lock requires the
+same executing runtime for every caller. Their versioned workflow files, builder
+and CI helpers, and legacy tool catalog are byte-identical to the previous pinned
+runtime. This advances the shared source pin without changing the v1/v2/v3 output
+contracts. Mixing the old builder pin with the new lock correctly fails.
 
 Unlike the development qualification's temporary fixture repository and synthetic
 run identities, this caller checks the actual clean GitHub source checkout and
@@ -24,7 +28,8 @@ workflow pin, source merge/tree and complete artifact set; rehash each whole
 download before bounded decoding, then check all seven leaves using independent
 expectations. Recheck the latest attempt, artifacts and source merge after reading.
 Perform current-clock verification within the protocol's one-hour limit. An expired
-receipt cannot be reused for current signing authorization.
+observation cannot be reused as current qualification evidence. This unsigned result
+does not authorize signing.
 
 This rehearsal demonstrates the real reusable caller and retained-byte consistency.
 Provider artifact storage metadata does not establish which producer job wrote
