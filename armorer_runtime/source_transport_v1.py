@@ -5,6 +5,7 @@ import base64
 import binascii
 from dataclasses import dataclass
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -191,8 +192,8 @@ def _actor(value, ident, login):
             value.get("login") == login and value.get("type") == "User", "source-control actor mismatch")
 
 
-def _run(value, expected, now):
-    """Require exact original/rerun actors, reusable pins and active/successful current attempt."""
+def _run(value, expected, now, allow_pending=False):
+    """Check complete intent before optional bounded waiting; observations require an active/successful attempt."""
     require(isinstance(value, dict) and all(type(value.get(key)) is int and value[key] == wanted for key, wanted in
             (("id", expected.run_id), ("run_attempt", expected.run_attempt), ("workflow_id", expected.workflow_id))) and
             value.get("path") == expected.caller_path and value.get("head_sha") == expected.head_commit and
@@ -209,11 +210,34 @@ def _run(value, expected, now):
     require(all(type(path) is str and _sha(sha) for path, sha in actual) and
             len(set(actual)) == len(actual) and set(actual) == set(expected.referenced_workflows),
             "source-control reusable identity mismatch")
-    require((value.get("status"), value.get("conclusion")) in (("in_progress", None), ("completed", "success")),
+    state = (value.get("status"), value.get("conclusion"))
+    if allow_pending and state in (("queued", None), ("pending", None), ("requested", None), ("waiting", None)):
+        if value.get("run_started_at") is not None:
+            start = _timestamp(value["run_started_at"])
+            require(0 < start <= now and now - start <= expected.max_age_seconds, "source-control pending attempt stale or future")
+        return None
+    require(state in (("in_progress", None), ("completed", "success")),
             "source-control attempt not active or successful")
     start = _timestamp(value.get("run_started_at"))
     require(0 < start <= now and now - start <= expected.max_age_seconds, "source-control attempt stale or future")
     return start
+
+
+def wait_for_source(api: SourceGhApi, expected: SourceIntent):
+    """Wait at most two minutes for an exact known pending context; never accept it as a source observation."""
+    require(type(api) is SourceGhApi and type(expected) is SourceIntent, "source-control adapter or intent invalid")
+    expected.validate()
+    deadline = min(api._deadline, time.monotonic() + 120)
+    route = "repos/" + expected.repository + f"/actions/runs/{expected.run_id}"
+    while True:
+        value = api.json(route)
+        start = _run(value, expected, int(time.time()), allow_pending=True)
+        require(time.monotonic() < deadline, "source-control readiness deadline expired")
+        print(json.dumps({"state": "source-provider-preflight", "run_id": expected.run_id,
+                          "provider_status": value["status"]}), flush=True)
+        if start is not None:
+            return start
+        time.sleep(min(2, max(0, deadline - time.monotonic())))
 
 
 def _commit(api, root, sha):

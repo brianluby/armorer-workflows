@@ -79,6 +79,17 @@ provider transaction; a later job must reauthenticate its own prerequisites.
 Default-branch changes, actor renames/revocation and PR updates require a new
 matching reviewed intent. No administrator setting changes are implemented.
 
+Hosted Linux qualification observed the provider reporting the exact matching
+run as queued beyond the preserved legacy qualification's thirty-second bound.
+The new source qualification runs first and may wait at most two minutes for a
+matching known pending run. All repository, caller, source, actor, workflow and
+attempt identity checks precede waiting; a supplied start time must also remain
+fresh. Unknown/failed/foreign/stale states reject immediately. Persistent pending
+expires. Readiness returns only active/successful metadata, and the complete
+source observer still requires strict active/successful latest/attempt snapshots.
+No receipt or archive read is accepted while pending. The legacy adapter,
+readiness timeout and qualification helper remain byte-identical.
+
 The hosted helper qualifies this candidate's PR source/caller on all three native
 runners with actual read tokens. Its caller digest comes from the development
 candidate checkout: it is a qualification expectation, not production review or

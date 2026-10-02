@@ -8,7 +8,7 @@ import shlex
 import tempfile
 
 from armorer_runtime.common import Failure, require
-from armorer_runtime.source_transport_v1 import SourceGhApi, SourceIntent, observe_source
+from armorer_runtime.source_transport_v1 import SourceGhApi, SourceIntent, observe_source, wait_for_source
 from armorer_runtime.tools import platform_target
 from armorer_runtime.transport_tools_v1 import install_gh
 
@@ -37,7 +37,9 @@ def main():
         executable, distribution = install_gh(root / "native")
         api = SourceGhApi(executable, token)
         del token
+        start = wait_for_source(api, expected)
         receipt = observe_source(api, expected)
+        require(receipt["source_control"]["run_started_at"] == start, "source qualification attempt changed after readiness")
         denied = SourceGhApi(executable, "armorer-test-only-invalid-token")
         try:
             denied.json("repos/" + expected.repository)

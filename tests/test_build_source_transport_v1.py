@@ -62,6 +62,37 @@ def observe(intent, responses):
 
 
 class SourceControlTests(unittest.TestCase):
+    def test_source_readiness_waits_only_for_exact_pending_context_then_requires_active_metadata(self):
+        """Matching queued propagation may wait; readiness never returns until exact active metadata is present."""
+        intent, responses = fixture()
+        active = responses["repos/owner/repo/actions/runs/17"]
+        pending = copy.deepcopy(active); pending.update(status="queued", run_started_at=None)
+        api = source.SourceGhApi(Path("/inert"), "test-only-token")
+        with mock.patch.object(api, "json", side_effect=[pending, active]) as read, \
+             mock.patch.object(source.time, "time", return_value=120), mock.patch.object(source.time, "monotonic", return_value=0), \
+             mock.patch.object(source.time, "sleep") as sleep:
+            self.assertEqual(source.wait_for_source(api, intent), 100)
+        self.assertEqual(read.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_source_readiness_rejects_foreign_failed_stale_and_persistent_pending_without_observation(self):
+        """A bounded readiness stage cannot convert substitutions, failures or an expired pending run into source proof."""
+        for case in ("foreign", "actor", "failed", "stale", "expired"):
+            intent, responses = fixture()
+            pending = responses["repos/owner/repo/actions/runs/17"]
+            pending.update(status="queued", run_started_at=None)
+            if case == "foreign": pending["id"] = 18
+            if case == "actor": pending["actor"]["id"] = 99
+            if case == "failed": pending.update(status="completed", conclusion="failure")
+            if case == "stale": pending["run_started_at"] = timestamp(121)
+            api = source.SourceGhApi(Path("/inert"), "test-only-token")
+            with mock.patch.object(api, "json", return_value=pending), \
+                 mock.patch.object(source.time, "time", return_value=120), \
+                 mock.patch.object(source.time, "monotonic", side_effect=[0, 121]), \
+                 mock.patch.object(source.time, "sleep") as sleep, self.assertRaises(Failure):
+                source.wait_for_source(api, intent)
+            sleep.assert_not_called()
+
     def test_pr_and_default_dispatch_observe_inert_bytes_without_credential_authority(self):
         """Both supported observation paths bind caller bytes and exact distinct original/rerun actors."""
         for event in ("pull_request", "workflow_dispatch"):
