@@ -193,75 +193,93 @@ function artifactRecord(value, expected, name, run, now) {
 
 /** Join one full provider snapshot through artifact IDs and service-reported uploader backend IDs. */
 async function snapshot(expected, scope, token, runtimeToken, deadline) {
-  const base = `https://api.github.com/repos/${expected.repository}`;
-  const route = `${base}/actions/runs/${expected.run_id}`;
-  const get = path => read(path, token, 'GET', undefined, deadline);
-  const now = Date.now();
-  const run = runRecord(await get(route), expected, now);
-  requireCondition(JSON.stringify(runRecord(await get(`${route}/attempts/${expected.run_attempt}`), expected, now)) ===
-    JSON.stringify(run));
-  const listedJobs = await get(`${route}/attempts/${expected.run_attempt}/jobs?per_page=100`);
-  requireCondition(listedJobs && Number.isSafeInteger(listedJobs.total_count) &&
-    Array.isArray(listedJobs.jobs) && listedJobs.jobs.length === listedJobs.total_count &&
-    listedJobs.total_count > 0 && listedJobs.total_count <= 100 &&
-    new Set(listedJobs.jobs.map(job => restId(job.id))).size === listedJobs.jobs.length);
-  const reader = jobRecord(listedJobs.jobs, expected.reader_job_name, expected.reader_runner, expected, true);
-  const mappedReader = checkRecord(await get(`${base}/check-runs/${reader.check_id}`), reader, run, expected, true);
-  requireCondition(mappedReader.backend_job_id === scope.workflowJobRunBackendId);
-  const listing = await get(`${route}/artifacts?per_page=100`);
-  requireCondition(listing && Array.isArray(listing.artifacts) &&
-    listing.total_count === expected.artifacts.length && listing.artifacts.length === listing.total_count &&
-    new Set(listing.artifacts.map(item => item.name)).size === listing.total_count &&
-    new Set(listing.artifacts.map(item => restId(item.id))).size === listing.total_count);
-  const results = await read(RESULTS + RPC, runtimeToken, 'POST', scope, deadline);
-  requireCondition(results && Array.isArray(results.artifacts) && results.artifacts.length === listing.total_count);
-  const joined = [];
-  const used = new Set();
-  const writers = new Map();
-  for (const item of expected.artifacts) {
-    let writer = writers.get(item.writer_job_name);
-    if (writer) requireCondition(writer.runner === item.writer_runner);
-    else {
-      const job = jobRecord(listedJobs.jobs, item.writer_job_name, item.writer_runner, expected, false);
-      writer = checkRecord(await get(`${base}/check-runs/${job.check_id}`), job, run, expected, false);
-      writers.set(item.writer_job_name, writer);
+  let phase = 'run';
+  try {
+    const base = `https://api.github.com/repos/${expected.repository}`;
+    const route = `${base}/actions/runs/${expected.run_id}`;
+    const get = path => read(path, token, 'GET', undefined, deadline);
+    const now = Date.now();
+    const run = runRecord(await get(route), expected, now);
+    requireCondition(JSON.stringify(runRecord(await get(`${route}/attempts/${expected.run_attempt}`), expected, now)) ===
+      JSON.stringify(run));
+    phase = 'jobs';
+    const listedJobs = await get(`${route}/attempts/${expected.run_attempt}/jobs?per_page=100`);
+    requireCondition(listedJobs && Number.isSafeInteger(listedJobs.total_count) &&
+      Array.isArray(listedJobs.jobs) && listedJobs.jobs.length === listedJobs.total_count &&
+      listedJobs.total_count > 0 && listedJobs.total_count <= 100 &&
+      new Set(listedJobs.jobs.map(job => restId(job.id))).size === listedJobs.jobs.length);
+    phase = 'reader';
+    const reader = jobRecord(listedJobs.jobs, expected.reader_job_name, expected.reader_runner, expected, true);
+    const mappedReader = checkRecord(await get(`${base}/check-runs/${reader.check_id}`), reader, run, expected, true);
+    requireCondition(mappedReader.backend_job_id === scope.workflowJobRunBackendId);
+    phase = 'listing';
+    const listing = await get(`${route}/artifacts?per_page=100`);
+    requireCondition(listing && Array.isArray(listing.artifacts) &&
+      listing.total_count === expected.artifacts.length && listing.artifacts.length === listing.total_count &&
+      new Set(listing.artifacts.map(item => item.name)).size === listing.total_count &&
+      new Set(listing.artifacts.map(item => restId(item.id))).size === listing.total_count);
+    phase = 'service';
+    const results = await read(RESULTS + RPC, runtimeToken, 'POST', scope, deadline);
+    requireCondition(results && Array.isArray(results.artifacts) && results.artifacts.length === listing.total_count);
+    const joined = [];
+    const used = new Set();
+    const writers = new Map();
+    for (const item of expected.artifacts) {
+      phase = 'writer';
+      let writer = writers.get(item.writer_job_name);
+      if (writer) requireCondition(writer.runner === item.writer_runner);
+      else {
+        const job = jobRecord(listedJobs.jobs, item.writer_job_name, item.writer_runner, expected, false);
+        writer = checkRecord(await get(`${base}/check-runs/${job.check_id}`), job, run, expected, false);
+        writers.set(item.writer_job_name, writer);
+      }
+      requireCondition(writer.backend_job_id !== mappedReader.backend_job_id);
+      phase = 'artifact';
+      const matches = listing.artifacts.filter(value => value.name === item.name);
+      requireCondition(matches.length === 1);
+      const artifact = artifactRecord(matches[0], expected, item.name, run, Date.now());
+      requireCondition(JSON.stringify(artifactRecord(await get(`${base}/actions/artifacts/${artifact.id}`),
+        expected, item.name, run, Date.now())) === JSON.stringify(artifact));
+      phase = 'join';
+      const backend = results.artifacts.filter(value => value.databaseId === artifact.id);
+      requireCondition(backend.length === 1 && !used.has(artifact.id));
+      used.add(artifact.id);
+      const value = backend[0];
+      for (const [field, wanted] of [['workflowRunBackendId', scope.workflowRunBackendId],
+        ['workflowJobRunBackendId', writer.backend_job_id], ['name', artifact.name],
+        ['size', artifact.size], ['digest', artifact.digest]]) {
+        requireCondition(value[field] === wanted, `artifact-writer-service-${field}-denied`);
+      }
+      // REST exposes whole seconds; retain the service precision while comparing that same second.
+      requireCondition(typeof value.createdAt === 'string' && Number.isFinite(Date.parse(value.createdAt)) &&
+        Math.floor(Date.parse(value.createdAt) / 1000) === Math.floor(Date.parse(artifact.created_at) / 1000),
+        'artifact-writer-service-createdAt-denied');
+      const created = Date.parse(artifact.created_at);
+      requireCondition(Number.isFinite(Date.parse(writer.started_at)) &&
+        Number.isFinite(Date.parse(writer.completed_at)) && created >= Date.parse(writer.started_at) &&
+        created <= Date.parse(writer.completed_at));
+      joined.push({ artifact, writer, service_created_at: value.createdAt });
     }
-    requireCondition(writer.backend_job_id !== mappedReader.backend_job_id);
-    const matches = listing.artifacts.filter(value => value.name === item.name);
-    requireCondition(matches.length === 1);
-    const artifact = artifactRecord(matches[0], expected, item.name, run, Date.now());
-    requireCondition(JSON.stringify(artifactRecord(await get(`${base}/actions/artifacts/${artifact.id}`),
-      expected, item.name, run, Date.now())) === JSON.stringify(artifact));
-    const backend = results.artifacts.filter(value => value.databaseId === artifact.id);
-    requireCondition(backend.length === 1 && !used.has(artifact.id));
-    used.add(artifact.id);
-    const value = backend[0];
-    for (const [field, wanted] of [['workflowRunBackendId', scope.workflowRunBackendId],
-      ['workflowJobRunBackendId', writer.backend_job_id], ['name', artifact.name],
-      ['size', artifact.size], ['digest', artifact.digest]]) {
-      requireCondition(value[field] === wanted, `artifact-writer-service-${field}-denied`);
+    requireCondition(new Set([...writers.values()].map(writer => writer.backend_job_id)).size === writers.size);
+    return { run, reader: mappedReader, backend_run_id: scope.workflowRunBackendId, artifacts: joined };
+  } catch (error) {
+    if (error.message === 'artifact-writer-observation-denied') {
+      throw new Error(`artifact-writer-phase-${phase}-denied`);
     }
-    // REST exposes whole seconds; retain the service precision while comparing that same second.
-    requireCondition(typeof value.createdAt === 'string' && Number.isFinite(Date.parse(value.createdAt)) &&
-      Math.floor(Date.parse(value.createdAt) / 1000) === Math.floor(Date.parse(artifact.created_at) / 1000),
-      'artifact-writer-service-createdAt-denied');
-    const created = Date.parse(artifact.created_at);
-    requireCondition(Number.isFinite(Date.parse(writer.started_at)) &&
-      Number.isFinite(Date.parse(writer.completed_at)) && created >= Date.parse(writer.started_at) &&
-      created <= Date.parse(writer.completed_at));
-    joined.push({ artifact, writer, service_created_at: value.createdAt });
+    throw error;
   }
-  requireCondition(new Set([...writers.values()].map(writer => writer.backend_job_id)).size === writers.size);
-  return { run, reader: mappedReader, backend_run_id: scope.workflowRunBackendId, artifacts: joined };
 }
 
 /** Read twice from fixed HTTPS authorities; return only a process-local observation handle. */
 export async function observeArtifactWriters(offered) {
   const expected = intent(offered);
-  requireCondition(process.env.GITHUB_SERVER_URL === 'https://github.com' &&
-    process.env.ACTIONS_RESULTS_URL === RESULTS + '/' && process.env.GITHUB_ACTIONS === 'true' &&
-    !['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'NODE_TLS_REJECT_UNAUTHORIZED', 'NODE_USE_ENV_PROXY']
-      .some(name => process.env[name] !== undefined));
+  requireCondition(process.env.GITHUB_SERVER_URL === 'https://github.com' && process.env.GITHUB_ACTIONS === 'true',
+    'artifact-writer-platform-context-denied');
+  requireCondition([RESULTS, RESULTS + '/'].includes(process.env.ACTIONS_RESULTS_URL),
+    'artifact-writer-results-origin-denied');
+  for (const name of ['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'NODE_TLS_REJECT_UNAUTHORIZED', 'NODE_USE_ENV_PROXY']) {
+    requireCondition(process.env[name] === undefined, `artifact-writer-environment-${name}-denied`);
+  }
   const token = process.env.ARMORER_WORKFLOW_READ_TOKEN;
   const runtimeToken = process.env.ACTIONS_RUNTIME_TOKEN;
   delete process.env.ARMORER_WORKFLOW_READ_TOKEN;

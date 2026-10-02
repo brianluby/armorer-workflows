@@ -40,7 +40,10 @@ try {
 } catch (error) {
   console.error('artifact-writer-native-qualification-failed');
   if (['artifact-writer-observation-denied', ...['workflowRunBackendId', 'workflowJobRunBackendId',
-    'name', 'size', 'digest', 'createdAt'].map(name => `artifact-writer-service-${name}-denied`)].includes(error.message)) {
+    'name', 'size', 'digest', 'createdAt'].map(name => `artifact-writer-service-${name}-denied`),
+    ...['run', 'jobs', 'reader', 'listing', 'service', 'writer', 'artifact', 'join'].map(name => `artifact-writer-phase-${name}-denied`),
+    ...['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'NODE_TLS_REJECT_UNAUTHORIZED', 'NODE_USE_ENV_PROXY'].map(name => `artifact-writer-environment-${name}-denied`),
+    'artifact-writer-platform-context-denied', 'artifact-writer-results-origin-denied'].includes(error.message)) {
     console.error(error.message);
   }
   process.exitCode = 1;

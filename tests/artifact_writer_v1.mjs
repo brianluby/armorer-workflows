@@ -80,13 +80,14 @@ async function denied(name, modify, change) {
   const value = fixture();
   install(value, change);
   modify(value);
-  await assert.rejects(observeArtifactWriters(value.expected), /^Error: artifact-writer-(observation|service-[A-Za-z]+)-denied$/, name);
+  await assert.rejects(observeArtifactWriters(value.expected), /^Error: artifact-writer-[A-Za-z_-]+-denied$/, name);
   count += 1;
 }
 
 try {
   const value = fixture();
   install(value);
+  process.env.ACTIONS_RESULTS_URL = "https://results-receiver.actions.githubusercontent.com";
   const pending = observeArtifactWriters(value.expected);
   value.expected.artifacts[0].writer_job_name = 'attacker-changed-after-read-start';
   const proof = await pending;
