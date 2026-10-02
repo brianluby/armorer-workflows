@@ -25,3 +25,8 @@ retains qualified native reports and actual advisory input bytes in separate
 unprivileged jobs without executing consuming builds or tests. Read
 [its versioned contract and remaining authentication gates](docs/independent-policy-v1.md)
 before adopting it. Existing CI/build callers remain required.
+
+The experimental [producer OIDC context helper](docs/producer-oidc-context-v1.md)
+verifies job identity against independent expectations. Its native RSA fixtures
+use a synthetic issuer; live producer, protection, signing and publication
+gates remain incomplete.
