@@ -30,3 +30,12 @@ The experimental [producer OIDC context helper](docs/producer-oidc-context-v1.md
 verifies job identity against independent expectations. Its native RSA fixtures
 use a synthetic issuer; live producer, protection, signing and publication
 gates remain incomplete.
+
+## Current-job controller prerequisite
+
+The [versioned controller observer](docs/controller-context-v1.md) independently
+maps one active job to its separate check-run identity and observes exact
+preexisting environment controls. Candidate PR qualification uses read-only
+native GitHub APIs on all three runners. Configuration and unknown or
+unsupported enforcement remain distinct; these receipts grant no signing or
+publication authority.
