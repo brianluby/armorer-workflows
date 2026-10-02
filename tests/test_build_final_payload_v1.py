@@ -80,7 +80,7 @@ def create(root, profile="cli", target="x86_64-unknown-linux-gnu", deliverable="
 def expected(items):
     """Use explicit synthetic authorities, not downloaded metadata, to define the expected full layout."""
     build = {"repository": "brianluby/armorer-workflows", "path": ".github/workflows/rust-build-v3.yml", "commit": "b" * 40}
-    package = {"repository": "brianluby/armorer-workflows", "path": ".github/workflows/release-cli.yml", "commit": "c" * 40}
+    package = {"repository": "brianluby/armorer-workflows", "path": ".github/workflows/release-cli.yml", "commit": "b" * 40}
     runtime = identity(b"synthetic reviewed runtime fixture; no acceptance")
     inputs = {"source": {**CONTEXT["source"], "git_ref": "refs/tags/v0.1.0"}, "config_sha256": INPUTS["armorer.toml"],
               "lock_sha256": INPUTS["armorer.lock"], "cargo_lock_sha256": INPUTS["Cargo.lock"], "runtime": runtime,
@@ -245,6 +245,19 @@ class FinalPayloadTests(unittest.TestCase):
                 with self.assertRaises(Failure):
                     with final.prepare_final_payloads({key: directory}, expected([item])):
                         self.fail("hostile handoff accepted")
+
+    def test_workflow_family_and_package_run_match_before_staging(self):
+        """Reject mixed workflow pins or an independent package workflow differing from the declared run before reads."""
+        with tempfile.TemporaryDirectory() as temporary:
+            _, item, _ = create(Path(temporary))
+            plan = expected([item])
+            variants = [replace(plan, package_workflow={**plan.package_workflow, "commit": "f" * 40}),
+                        replace(plan, package_workflow={**plan.package_workflow, "path": ".github/workflows/other.yml"}),
+                        replace(plan, build_workflow={**plan.build_workflow, "commit": "f" * 40})]
+            for offered in variants:
+                with self.subTest(offered=offered), mock.patch("tempfile.TemporaryDirectory", side_effect=AssertionError("staging attempted")), self.assertRaises(Failure):
+                    with final.prepare_final_payloads({item.selection["artifact_id"]: Path("/do-not-read")}, offered):
+                        self.fail("incompatible consumer workflow family accepted")
 
     def test_copied_expectations_and_payloads_do_not_follow_later_source_mutation(self):
         """Keep private snapshots stable when original unsigned files or caller-owned expectation dictionaries change."""

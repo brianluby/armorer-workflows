@@ -13,6 +13,11 @@ authorization proof. There is no public workflow, command, source override,
 custom-provenance input, attestation token, Apple credential or release mutation
 in this module. Its production integration is still in progress.
 
+The build and package workflows must share the reviewed workflow family SHA, and
+the package workflow must exactly match the independently expected run workflow.
+Mixed pins or a different package/run identity fail before staging, matching the
+strict consumer's unchanged workflow-lock semantics.
+
 The bounded private workspace stages at most 64 selections and 4 GiB total,
 including retained unsigned snapshots and later metadata/bundles. The assembler
 admits complete sets, regular leaves and fixed names only. Source archives remain

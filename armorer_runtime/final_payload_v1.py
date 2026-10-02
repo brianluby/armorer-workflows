@@ -126,6 +126,9 @@ def _validate_expected(expected: ReleaseExpectation) -> ReleaseExpectation:
     _byte_identity(expected.catalog)
     _workflow(expected.build_workflow)
     _workflow(expected.package_workflow)
+    require(_json(expected.package_workflow) == _json(expected.inputs["run"]["workflow"]) and
+            expected.build_workflow["commit"] == expected.package_workflow["commit"],
+            "final workflow family or package run mismatch")
     require(expected.build_workflow["path"] == ".github/workflows/rust-build-v3.yml", "unsupported handoff builder")
     require(type(expected.build_inputs) is tuple and 0 < len(expected.build_inputs) <= 128, "missing final build input identities")
     for identity in expected.build_inputs:
