@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
 import hashlib
 import os
 from pathlib import Path
@@ -224,11 +225,18 @@ The private directories cease to exist when this context exits.
         require(_listing(final_listing, expected, set(by_name), start, final_now) == records,
                 "policy provider artifacts changed")
         for selection in selections:
-            policy.verify(directories[selection["artifact_id"]], expected.context(), selection, source_inputs,
+            directory = directories[selection["artifact_id"]]
+            policy.verify(directory, expected.context(), selection, source_inputs,
                           runtime_inputs, catalog, project_policy)
+            for leaf, wanted in observations[selection["artifact_id"]]["leaves"].items():
+                require(_identity(directory / leaf, wanted["size"]) == wanted, "policy snapshot leaf changed")
         end_now = int(time.time())
         require(end_now >= final_now and time.monotonic() < api._deadline and oldest is not None and
                 end_now - oldest <= expected.max_age_seconds, "policy snapshot expired during final verification")
+        end_date = datetime.fromtimestamp(end_now, timezone.utc).date()
+        require(all(end_date <= date.fromisoformat(exception["expires"])
+                    for exception in project_policy["advisories"]["exceptions"]),
+                "policy exception expired at transport boundary")
         receipt = {"schema_version": 1, "state": "policy-provider-transport-observed",
                    "authority": "github-rest-via-pinned-native-gh", "gh_version": GH_VERSION, "gh_source_commit": GH_SOURCE,
                    "gh_native": {"sha256": GH_PINS[platform_target()][1], "size": GH_PINS[platform_target()][0]},

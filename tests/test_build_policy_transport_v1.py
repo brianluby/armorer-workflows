@@ -201,6 +201,76 @@ class PolicyTransportTests(unittest.TestCase):
                 with self.subTest(value=value), self.assertRaises(common.Failure):
                     value.validate()
 
+    def test_exception_expiry_at_final_transport_boundary_cannot_yield(self):
+        """A date rollover after the last reader check must still reject an expiring advisory exception."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            records, args = self.fixture(root)
+            envelope = policy.parse_json((root / 'policy-v1.json').read_bytes())
+            envelope['observed'] = {'started_at': 86398, 'finished_at': 86399}
+            args[6]['advisories']['exceptions'] = [{'id': 'RUSTSEC-2020-0001', 'owner': 'fixture',
+                'reason': 'synthetic rollover test', 'expires': '1970-01-01'}]
+            envelope['effective_policy'] = args[6]
+            database = policy.parse_json((root / 'advisory-db.json').read_bytes())
+            database['fetched_at'] = 86398
+            data = policy.canonical(database)
+            (root / 'advisory-db.json').write_bytes(data)
+            envelope['reports']['advisory-db.json'] = pins.identity(data)
+            (root / 'policy-v1.json').write_bytes(policy.canonical(envelope))
+            output = io.BytesIO()
+            with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+                for leaf in root.iterdir():
+                    archive.writestr(leaf.name, leaf.read_bytes())
+            records['data'] = output.getvalue()
+            identity = pins.identity(records['data'])
+            for record in (records['run'], records['attempt']):
+                record['run_started_at'] = '1970-01-01T23:59:58Z'
+            for record in (records['listing']['artifacts'][0], records['detail']):
+                record.update({'digest': 'sha256:' + identity['sha256'], 'size_in_bytes': identity['size'],
+                    'created_at': '1970-01-01T23:59:59Z', 'updated_at': '1970-01-01T23:59:59Z',
+                    'expires_at': '1970-01-02T23:59:59Z'})
+            with mock.patch.object(transport.time, 'time', side_effect=[86399] * 7 + [86400]):
+                with self.assertRaisesRegex(common.Failure, 'exception expired at transport boundary'):
+                    with transport.collect_policy(*args):
+                        self.fail('expired exception yielded reports')
+
+    def test_semantically_valid_leaf_replacement_cannot_change_receipt_bytes(self):
+        """Another valid JSON encoding cannot replace authenticated leaf bytes while keeping the old receipt."""
+        with tempfile.TemporaryDirectory() as temporary:
+            records, args = self.fixture(Path(temporary))
+            original_download = args[0].archive
+            original_read = args[0].json
+            state = {}
+
+            def download(repository, artifact_id, destination):
+                """Record the private directory location after creating the unchanged authenticated ZIP."""
+                original_download(repository, artifact_id, destination)
+                state['directory'] = destination.parent / args[2][0]['artifact_id']
+
+            def read(endpoint):
+                """Substitute a self-consistent valid report after the first reader and before final validation."""
+                if endpoint.endswith('/runs/17') and 'directory' in state and not state.get('changed'):
+                    directory = state['directory']
+                    report = directory / 'actionlint.json'
+                    report.chmod(0o600)
+                    report.write_bytes(b'[] ')
+                    envelope_path = directory / 'policy-v1.json'
+                    envelope = policy.parse_json(envelope_path.read_bytes())
+                    envelope['reports']['actionlint.json'] = pins.identity(report.read_bytes())
+                    envelope_path.chmod(0o600)
+                    envelope_path.write_bytes(policy.canonical(envelope))
+                    policy.verify(directory, args[1].context(), args[2][0], *args[3:], now=1003)
+                    state['changed'] = True
+                return original_read(endpoint)
+
+            args[0].archive = download
+            args[0].json = read
+            with mock.patch.object(transport.time, 'time', return_value=1003):
+                with self.assertRaisesRegex(common.Failure, 'policy snapshot leaf changed'):
+                    with transport.collect_policy(*args):
+                        self.fail('replacement bytes yielded an obsolete receipt')
+            self.assertTrue(state['changed'])
+
 
 if __name__ == '__main__':
     unittest.main()
