@@ -88,6 +88,14 @@ try {
   const value = fixture();
   install(value);
   process.env.ACTIONS_RESULTS_URL = "https://results-receiver.actions.githubusercontent.com";
+  const service = value.documents.get(rpc).artifacts[0];
+  for (const [name, original] of [['workflowRunBackendId', 'workflow_run_backend_id'],
+    ['workflowJobRunBackendId', 'workflow_job_run_backend_id'], ['databaseId', 'database_id'], ['createdAt', 'created_at']]) {
+    service[original] = service[name];
+    delete service[name];
+  }
+  service.database_id = 55;
+  service.size = 1024;
   const pending = observeArtifactWriters(value.expected);
   value.expected.artifacts[0].writer_job_name = 'attacker-changed-after-read-start';
   const proof = await pending;
@@ -132,6 +140,8 @@ try {
   await denied('builder output cannot replace actual writer', value => { value.documents.get(rpc).artifacts[0].workflowJobRunBackendId = backendReader; });
   await denied('wrong backend run', value => { value.documents.get(rpc).artifacts[0].workflowRunBackendId = backendWriter; });
   await denied('wrong backend artifact ID', value => { value.documents.get(rpc).artifacts[0].databaseId = '56'; });
+  await denied('ambiguous ProtoJSON aliases', value => { value.documents.get(rpc).artifacts[0].database_id = '55'; });
+  await denied('lossy ProtoJSON integer is rejected', value => { value.documents.get(rpc).artifacts[0].databaseId = 9007199254740992; });
   await denied('duplicated backend artifact', value => { value.documents.get(rpc).artifacts.push({ ...value.documents.get(rpc).artifacts[0] }); });
   await denied('artifact digest changed', value => { value.documents.get(rpc).artifacts[0].digest = 'sha256:' + 'c'.repeat(64); });
   await denied('artifact size changed', value => { value.documents.get(rpc).artifacts[0].size = '1025'; });

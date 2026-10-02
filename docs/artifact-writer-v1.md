@@ -23,6 +23,13 @@ provides routing IDs only; it does not authenticate its claims. The authenticate
 service call and independent native check join supply the provider evidence.
 Builder outputs, artifact JSON and job logs never establish uploader identity.
 
+Service records follow [ProtoJSON](https://protobuf.dev/programming-guides/json/):
+the decoder accepts original protobuf field names or their lower-camel JSON
+names, and canonical decimal strings or exact safe integer numbers for int64
+fields. Duplicate aliases, null/missing fields, fractional or lossy numbers and
+noncanonical decimal strings block the observation. The actual field names and
+integer forms are retained in credential-free native receipts.
+
 The only artifact-service request is read-only `ListArtifacts` over POST to the
 fixed GitHub.com results receiver. Create, finalize, delete and signed download
 URL methods are absent. REST and runtime credentials are separate, consumed from

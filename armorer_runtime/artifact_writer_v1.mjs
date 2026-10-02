@@ -191,6 +191,31 @@ function artifactRecord(value, expected, name, run, now) {
     created_at: value.created_at, updated_at: value.updated_at, expires_at: value.expires_at };
 }
 
+/** Decode the official ProtoJSON names/int64 forms, rejecting ambiguous aliases and lossy numbers. */
+function backendRecord(value) {
+  requireCondition(value && Object.getPrototypeOf(value) === Object.prototype,
+    'artifact-writer-service-wire-shape-denied');
+  const record = {};
+  const fields = {};
+  const integerForms = {};
+  for (const [name, original] of [['workflowRunBackendId', 'workflow_run_backend_id'],
+    ['workflowJobRunBackendId', 'workflow_job_run_backend_id'], ['databaseId', 'database_id'],
+    ['name', 'name'], ['size', 'size'], ['digest', 'digest'], ['createdAt', 'created_at']]) {
+    const keys = [...new Set([name, original])].filter(key => Object.hasOwn(value, key));
+    requireCondition(keys.length === 1, `artifact-writer-service-wire-${name}-denied`);
+    fields[name] = keys[0];
+    let field = value[keys[0]];
+    if (['databaseId', 'size'].includes(name)) {
+      integerForms[name] = typeof field;
+      field = typeof field === 'number' ? restId(field) : identifier(field);
+    }
+    requireCondition(typeof field === 'string', `artifact-writer-service-wire-${name}-denied`);
+    record[name] = field;
+  }
+  record.encoding = { fields, integer_forms: integerForms };
+  return record;
+}
+
 /** Join one full provider snapshot through artifact IDs and service-reported uploader backend IDs. */
 async function snapshot(expected, scope, token, runtimeToken, deadline) {
   let phase = 'run';
@@ -219,8 +244,9 @@ async function snapshot(expected, scope, token, runtimeToken, deadline) {
       new Set(listing.artifacts.map(item => item.name)).size === listing.total_count &&
       new Set(listing.artifacts.map(item => restId(item.id))).size === listing.total_count);
     phase = 'service';
-    const results = await read(RESULTS + RPC, runtimeToken, 'POST', scope, deadline);
-    requireCondition(results && Array.isArray(results.artifacts) && results.artifacts.length === listing.total_count);
+    const response = await read(RESULTS + RPC, runtimeToken, 'POST', scope, deadline);
+    requireCondition(response && Array.isArray(response.artifacts) && response.artifacts.length === listing.total_count);
+    const results = { artifacts: response.artifacts.map(backendRecord) };
     const joined = [];
     const used = new Set();
     const writers = new Map();
@@ -258,7 +284,7 @@ async function snapshot(expected, scope, token, runtimeToken, deadline) {
       requireCondition(Number.isFinite(Date.parse(writer.started_at)) &&
         Number.isFinite(Date.parse(writer.completed_at)) && created >= Date.parse(writer.started_at) &&
         created <= Date.parse(writer.completed_at));
-      joined.push({ artifact, writer, service_created_at: value.createdAt });
+      joined.push({ artifact, writer, service_created_at: value.createdAt, service_encoding: value.encoding });
     }
     requireCondition(new Set([...writers.values()].map(writer => writer.backend_job_id)).size === writers.size);
     return { run, reader: mappedReader, backend_run_id: scope.workflowRunBackendId, artifacts: joined };
