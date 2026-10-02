@@ -1,0 +1,389 @@
+{
+  "schema_version": 1,
+  "tools": {
+    "actionlint": {
+      "binary": "actionlint",
+      "platforms": {
+        "aarch64-apple-darwin": {
+          "authentication_record": {
+            "asset_id": 384924893,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 303326868,
+            "release_record": {
+              "sha256": "13731655e28ab2792f21006d2d64cab4398160f0416162a43dd494800a6da351",
+              "size": 23684
+            },
+            "repository": "rhysd/actionlint",
+            "source_commit": "914e7df21a07ef503a81201c76d2b11c789d3fca",
+            "source_record": {
+              "sha256": "d32bcd0e0604a4528528a6bfc66b3ff8e671044193fd77a52bd1858fb446e2aa",
+              "size": 12028
+            },
+            "tag": "v1.7.12",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f",
+            "size": 2164202
+          },
+          "executable": {
+            "sha256": "8db11704dc296f096216db4db65d86cd7f0ebfdf4c38453a1da276b137b88388",
+            "size": 5829842
+          },
+          "format": "tar.gz",
+          "member": "actionlint",
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz"
+        },
+        "aarch64-unknown-linux-gnu": {
+          "authentication_record": {
+            "asset_id": 384924897,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 303326868,
+            "release_record": {
+              "sha256": "13731655e28ab2792f21006d2d64cab4398160f0416162a43dd494800a6da351",
+              "size": 23684
+            },
+            "repository": "rhysd/actionlint",
+            "source_commit": "914e7df21a07ef503a81201c76d2b11c789d3fca",
+            "source_record": {
+              "sha256": "d32bcd0e0604a4528528a6bfc66b3ff8e671044193fd77a52bd1858fb446e2aa",
+              "size": 12028
+            },
+            "tag": "v1.7.12",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6",
+            "size": 2111482
+          },
+          "executable": {
+            "sha256": "ac0323433c2853ec3fb978c611430c5b3dc5d43c58d1a1ec031b00ab572beb60",
+            "size": 5832866
+          },
+          "format": "tar.gz",
+          "member": "actionlint",
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_arm64.tar.gz"
+        },
+        "x86_64-unknown-linux-gnu": {
+          "authentication_record": {
+            "asset_id": 384924896,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 303326868,
+            "release_record": {
+              "sha256": "13731655e28ab2792f21006d2d64cab4398160f0416162a43dd494800a6da351",
+              "size": 23684
+            },
+            "repository": "rhysd/actionlint",
+            "source_commit": "914e7df21a07ef503a81201c76d2b11c789d3fca",
+            "source_record": {
+              "sha256": "d32bcd0e0604a4528528a6bfc66b3ff8e671044193fd77a52bd1858fb446e2aa",
+              "size": 12028
+            },
+            "tag": "v1.7.12",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+            "size": 2353908
+          },
+          "executable": {
+            "sha256": "c872d6db8c6bf83a8eaa704fc93999f027d55dffbc63b8a6abdccb47df5f4cd4",
+            "size": 6074530
+          },
+          "format": "tar.gz",
+          "member": "actionlint",
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
+        }
+      },
+      "version": "1.7.12"
+    },
+    "cargo-deny": {
+      "binary": "cargo-deny",
+      "platforms": {
+        "aarch64-apple-darwin": {
+          "authentication_record": {
+            "asset_id": 471597689,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 351697149,
+            "release_record": {
+              "sha256": "4688758c3f569843290aa46162441966079e4170ce0cd30bdc50bf18a387fcd5",
+              "size": 18633
+            },
+            "repository": "EmbarkStudios/cargo-deny",
+            "source_commit": "bca0dde53651ee946720e4540b5ce2610bec8f06",
+            "source_record": {
+              "sha256": "0aa7bcc1e4ae3f58231564d15217190083bf8e97613aaa67704400090255025d",
+              "size": 6471
+            },
+            "tag": "0.20.2",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "fe67d82a10d8597a3549364cb733a3f9cc1bfff9031b7ae46384a9f2a72090c3",
+            "size": 4517865
+          },
+          "executable": {
+            "sha256": "5f65c07c459c9514f0c97cc2e2fb6b120daef2d95aee31062cab4816cf027eb1",
+            "size": 7456248
+          },
+          "format": "tar.gz",
+          "member": "cargo-deny-0.20.2-aarch64-apple-darwin/cargo-deny",
+          "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-aarch64-apple-darwin.tar.gz"
+        },
+        "aarch64-unknown-linux-gnu": {
+          "authentication_record": {
+            "asset_id": 471598345,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 351697149,
+            "release_record": {
+              "sha256": "4688758c3f569843290aa46162441966079e4170ce0cd30bdc50bf18a387fcd5",
+              "size": 18633
+            },
+            "repository": "EmbarkStudios/cargo-deny",
+            "source_commit": "bca0dde53651ee946720e4540b5ce2610bec8f06",
+            "source_record": {
+              "sha256": "0aa7bcc1e4ae3f58231564d15217190083bf8e97613aaa67704400090255025d",
+              "size": 6471
+            },
+            "tag": "0.20.2",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "995c82be0defc7a025cae49a2aa2644ce8245c9a3318fc4103907c6a285e8c7d",
+            "size": 4631618
+          },
+          "executable": {
+            "sha256": "21e797104e371854dde7f05f52d834e70312749d361c168429ced996f2194462",
+            "size": 7607080
+          },
+          "format": "tar.gz",
+          "member": "cargo-deny-0.20.2-aarch64-unknown-linux-musl/cargo-deny",
+          "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-aarch64-unknown-linux-musl.tar.gz"
+        },
+        "x86_64-unknown-linux-gnu": {
+          "authentication_record": {
+            "asset_id": 471598214,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 351697149,
+            "release_record": {
+              "sha256": "4688758c3f569843290aa46162441966079e4170ce0cd30bdc50bf18a387fcd5",
+              "size": 18633
+            },
+            "repository": "EmbarkStudios/cargo-deny",
+            "source_commit": "bca0dde53651ee946720e4540b5ce2610bec8f06",
+            "source_record": {
+              "sha256": "0aa7bcc1e4ae3f58231564d15217190083bf8e97613aaa67704400090255025d",
+              "size": 6471
+            },
+            "tag": "0.20.2",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f",
+            "size": 4936832
+          },
+          "executable": {
+            "sha256": "b329e25933d01c36dd7c47d84ea5716694f9b7caf53a5003d45674703a8ed54a",
+            "size": 8844624
+          },
+          "format": "tar.gz",
+          "member": "cargo-deny-0.20.2-x86_64-unknown-linux-musl/cargo-deny",
+          "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz"
+        }
+      },
+      "version": "0.20.2"
+    },
+    "gitleaks": {
+      "binary": "gitleaks",
+      "platforms": {
+        "aarch64-apple-darwin": {
+          "authentication_record": {
+            "asset_id": 378332059,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 299662760,
+            "release_record": {
+              "sha256": "40df9d11b1165261275fca109b43cccedc768d60355640c68fba3e85a4925800",
+              "size": 19219
+            },
+            "repository": "gitleaks/gitleaks",
+            "source_commit": "83d9cd684c87d95d656c1458ef04895a7f1cbd8e",
+            "source_record": {
+              "sha256": "df5f8b1217941a657b55d5677351ba9c93a2faddbb0a810f8098d31f088ef74e",
+              "size": 4753
+            },
+            "tag": "v8.30.1",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
+            "size": 7897593
+          },
+          "executable": {
+            "sha256": "ba52fb1bfabbcde42f032afad3d6e0b19dff8ed105229a16e7caa338bbc0e84f",
+            "size": 21324882
+          },
+          "format": "tar.gz",
+          "member": "gitleaks",
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz"
+        },
+        "aarch64-unknown-linux-gnu": {
+          "authentication_record": {
+            "asset_id": 378332057,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 299662760,
+            "release_record": {
+              "sha256": "40df9d11b1165261275fca109b43cccedc768d60355640c68fba3e85a4925800",
+              "size": 19219
+            },
+            "repository": "gitleaks/gitleaks",
+            "source_commit": "83d9cd684c87d95d656c1458ef04895a7f1cbd8e",
+            "source_record": {
+              "sha256": "df5f8b1217941a657b55d5677351ba9c93a2faddbb0a810f8098d31f088ef74e",
+              "size": 4753
+            },
+            "tag": "v8.30.1",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080",
+            "size": 7601421
+          },
+          "executable": {
+            "sha256": "00e91bbe655bd7c47753e8cfe61cb76ea1a5d7e7702fe161ee40102b46b3823b",
+            "size": 20775096
+          },
+          "format": "tar.gz",
+          "member": "gitleaks",
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz"
+        },
+        "x86_64-unknown-linux-gnu": {
+          "authentication_record": {
+            "asset_id": 378332058,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 299662760,
+            "release_record": {
+              "sha256": "40df9d11b1165261275fca109b43cccedc768d60355640c68fba3e85a4925800",
+              "size": 19219
+            },
+            "repository": "gitleaks/gitleaks",
+            "source_commit": "83d9cd684c87d95d656c1458ef04895a7f1cbd8e",
+            "source_record": {
+              "sha256": "df5f8b1217941a657b55d5677351ba9c93a2faddbb0a810f8098d31f088ef74e",
+              "size": 4753
+            },
+            "tag": "v8.30.1",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+            "size": 8230402
+          },
+          "executable": {
+            "sha256": "88f91962aa2f93ac6ab281d553b9e125f5197bbbce38f9f2437f7299c32e5509",
+            "size": 21958840
+          },
+          "format": "tar.gz",
+          "member": "gitleaks",
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+        }
+      },
+      "version": "8.30.1"
+    },
+    "zizmor": {
+      "binary": "zizmor",
+      "platforms": {
+        "aarch64-apple-darwin": {
+          "authentication_record": {
+            "asset_id": 552067640,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 385241714,
+            "release_record": {
+              "sha256": "41441e1d730366fb9f948fd39c925a5bab61918a62e2cfa295a41dbf09ec05e5",
+              "size": 11009
+            },
+            "repository": "zizmorcore/zizmor",
+            "source_commit": "99a054ed9283c90abdd2d5b9fb5101d27dde9783",
+            "source_record": {
+              "sha256": "e899256acb8f388fe35c823dc669789f6dd7a569fb7a96f7dc0066266d786318",
+              "size": 9496
+            },
+            "tag": "v1.30.1",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "e28d22b087f9ebb8d99da6e740d348c930f559961c7c3f12badda54f882195a2",
+            "size": 8369128
+          },
+          "executable": {
+            "sha256": "0cd1e69b329cdbc2ded5cd3b5161f21ffd89652eab6563153e4af5a69344c64d",
+            "size": 22909456
+          },
+          "format": "tar.gz",
+          "member": "zizmor",
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-aarch64-apple-darwin.tar.gz"
+        },
+        "aarch64-unknown-linux-gnu": {
+          "authentication_record": {
+            "asset_id": 552067643,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 385241714,
+            "release_record": {
+              "sha256": "41441e1d730366fb9f948fd39c925a5bab61918a62e2cfa295a41dbf09ec05e5",
+              "size": 11009
+            },
+            "repository": "zizmorcore/zizmor",
+            "source_commit": "99a054ed9283c90abdd2d5b9fb5101d27dde9783",
+            "source_record": {
+              "sha256": "e899256acb8f388fe35c823dc669789f6dd7a569fb7a96f7dc0066266d786318",
+              "size": 9496
+            },
+            "tag": "v1.30.1",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "7ff1dce33bdd18fd2a4affe63bdd47efcccca97b2cec1c1863ec26e9e2647540",
+            "size": 8719235
+          },
+          "executable": {
+            "sha256": "72715e768ed9eda0fb7ace42ce50168c99c9146246710858fd2daf9b31ab14b1",
+            "size": 24819680
+          },
+          "format": "tar.gz",
+          "member": "zizmor",
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-aarch64-unknown-linux-gnu.tar.gz"
+        },
+        "x86_64-unknown-linux-gnu": {
+          "authentication_record": {
+            "asset_id": 552067642,
+            "kind": "github-release-provider-record-v1",
+            "release_id": 385241714,
+            "release_record": {
+              "sha256": "41441e1d730366fb9f948fd39c925a5bab61918a62e2cfa295a41dbf09ec05e5",
+              "size": 11009
+            },
+            "repository": "zizmorcore/zizmor",
+            "source_commit": "99a054ed9283c90abdd2d5b9fb5101d27dde9783",
+            "source_record": {
+              "sha256": "e899256acb8f388fe35c823dc669789f6dd7a569fb7a96f7dc0066266d786318",
+              "size": 9496
+            },
+            "tag": "v1.30.1",
+            "upstream_signature_verified": false
+          },
+          "distribution": {
+            "sha256": "e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a",
+            "size": 9169512
+          },
+          "executable": {
+            "sha256": "d39db5594fd89d57fdadd744079e1b3a405f24ff312714904f8bd708c69f322f",
+            "size": 26603008
+          },
+          "format": "tar.gz",
+          "member": "zizmor",
+          "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+        }
+      },
+      "version": "1.30.1"
+    }
+  }
+}
