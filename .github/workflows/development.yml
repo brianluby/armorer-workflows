@@ -276,6 +276,26 @@ jobs:
           from source_cases_v1 import main
           main()
           PY
+      - name: Qualify independently mapped current job with native read-only APIs
+        if: github.event_name == 'pull_request'
+        env:
+          ARMORER_READ_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+          EXPECTED_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          EXPECTED_RUNNER_LABEL: ${{ matrix.runner }}
+          GH_DEBUG: api
+          GITHUB_TOKEN: test-only-unrelated-token
+          HTTP_PROXY: http://test-only.invalid:9
+        run: |
+          python3 -I - <<'PYTHON'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from controller_cases_v1 import main
+          main()
+          PYTHON
       - name: Qualify pinned native GETs with an isolated workflow read token
         env:
           ARMORER_READ_TOKEN: ${{ github.token }}
