@@ -54,7 +54,7 @@ def _run(value, expected, now):
             value.get("event") == expected.event and value.get("path") == CALLER_PATH,
             "native qualification source or caller mismatch")
     require((value.get("status"), value.get("conclusion")) in (("in_progress", None), ("completed", "success")),
-            "native qualification run is not successful or active")
+            "native qualification run is not successful or active: " + "/".join(_state(value)))
     for name in ("repository", "head_repository"):
         repository = value.get(name)
         require(isinstance(repository, dict) and type(repository.get("id")) is int and
@@ -65,6 +65,15 @@ def _run(value, expected, now):
     return start
 
 
+def _state(value):
+    """Expose only recognized provider state enums; arbitrary bodies and values are discarded."""
+    status = value.get("status")
+    conclusion = value.get("conclusion")
+    return (status if status in ("queued", "pending", "requested", "waiting", "in_progress", "completed") else "unsupported",
+            "none" if conclusion is None else conclusion if conclusion in
+            ("success", "failure", "neutral", "cancelled", "skipped", "timed_out", "action_required", "stale") else "unsupported")
+
+
 def qualify(api, expected, distribution):
     """Recheck three actual qualification archive identities using the existing bounded fixed native adapter."""
     require(type(api) is QualifiedGhApi and type(expected) is ExpectedRead, "native qualification adapter or intent invalid")
@@ -72,7 +81,11 @@ def qualify(api, expected, distribution):
     names = {f"policy-native-v1-{runner}-{expected.run_id}-{expected.run_attempt}" for runner in RUNNERS}
     route = f"repos/{expected.repository}/actions/runs/{expected.run_id}"
     now = int(time.time())
-    start = _run(api.json(route), expected, now)
+    latest = api.json(route)
+    state = _state(latest)
+    print(json.dumps({"state": "native-provider-preflight", "run_id": expected.run_id,
+                      "provider_status": state[0], "provider_conclusion": state[1]}), flush=True)
+    start = _run(latest, expected, now)
     require(_run(api.json(route + f"/attempts/{expected.run_attempt}"), expected, now) == start, "native qualification attempts differ")
     records = _listing(api.json(route + "/artifacts?per_page=100"), expected, names, start, now)
     observed = {}

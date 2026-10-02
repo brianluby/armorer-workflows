@@ -13,7 +13,7 @@ import zipfile
 from armorer_runtime import transport_tools_v1 as tools
 from armorer_runtime import transport_v1
 from armorer_runtime.common import Failure
-from transport_cases_v1 import ExpectedRead, _run, qualify
+from transport_cases_v1 import ExpectedRead, _run, _state, qualify
 from test_build_transport_v1 import timestamp
 
 
@@ -66,6 +66,12 @@ def provider():
 
 
 class NativeTransportToolTests(unittest.TestCase):
+    def test_unrecognized_provider_values_are_excluded_from_state_diagnostics(self):
+        """State diagnostics must not print arbitrary provider bodies or purported credential values."""
+        self.assertEqual(_state({"status": "test-only-sensitive-value", "conclusion": {"secret": "test-only-value"}}),
+                         ("unsupported", "unsupported"))
+        self.assertEqual(_state({"status": "in_progress", "conclusion": None}), ("in_progress", "none"))
+
     def test_both_archive_formats_return_one_exact_inert_leaf(self):
         """Accept exact bounded tar/ZIP leaf bytes without executing any test or foreign binary."""
         for kind in ("tar.gz", "zip"):
