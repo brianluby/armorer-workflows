@@ -1,0 +1,20 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "library",
+      "name": "custom_library",
+      "version": "0.1.0",
+      "bom-ref": "app"
+    }
+  },
+  "components": [],
+  "dependencies": [
+    {
+      "ref": "app",
+      "dependsOn": []
+    }
+  ]
+}
