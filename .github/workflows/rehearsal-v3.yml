@@ -1,4 +1,4 @@
-name: Synthetic unsigned build rehearsal
+name: Synthetic unsigned handoff v3 rehearsal
 
 on:
   pull_request:
@@ -15,4 +15,4 @@ concurrency:
 
 jobs:
   reusable:
-    uses: brianluby/armorer-workflows/.github/workflows/rust-build.yml@bd76fe10dfb54b022c1f755b300bd498fa79fe48
+    uses: brianluby/armorer-workflows/.github/workflows/rust-build-v3.yml@bd76fe10dfb54b022c1f755b300bd498fa79fe48
