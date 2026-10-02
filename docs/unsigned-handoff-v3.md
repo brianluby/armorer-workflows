@@ -62,6 +62,12 @@ approval, and revalidate complete CycloneDX with its own approved native adapter
 The reader's reused v2 graph check alone is not a whole-document schema proof.
 No unsigned envelope may substitute for verified platform evidence.
 
+The separate [provider transport collector](provider-transport-v1.md) now checks
+exact live storage/run/attempt identities and archive bytes before yielding inert
+leaves. It remains a transport observation, with producer-job authentication and
+signing authorization explicitly false. Qualified platform reports, whole SBOM
+validation and effective protected finalizer integration remain required.
+
 Final packaging, qualified retained platform reports, current-producer final-byte
 provenance/SBOM/inventory bundles, own genuine complete signed positive,
 independent consumer verification and human acceptance remain required #8 gates.
