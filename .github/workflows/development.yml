@@ -30,7 +30,7 @@ jobs:
       - name: Native Node 24 independent mapped-producer fixtures without live OIDC
         uses: brianluby/armorer-workflows/.github/actions/test-mapped-producer-v1@9427f8ce06a4392bf906adb37dc9293511e55382
       - name: Native Node 24 artifact writer rejection fixtures without live credentials
-        uses: brianluby/armorer-workflows/.github/actions/test-artifact-writer-v1@b37fef0c86acb31d93f6bf2d9e01fbafcd089ab6
+        uses: brianluby/armorer-workflows/.github/actions/test-artifact-writer-v1@c4241879473917025bcdc03111a612303fea357f
       - name: Install exact fixture compiler
         run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
       - name: Install reviewed native audit tools
@@ -349,7 +349,7 @@ jobs:
           main()
           PY
       - name: Qualify actual artifact uploader mappings from native provider records
-        uses: brianluby/armorer-workflows/.github/actions/qualify-artifact-writer-v1@b37fef0c86acb31d93f6bf2d9e01fbafcd089ab6
+        uses: brianluby/armorer-workflows/.github/actions/qualify-artifact-writer-v1@c4241879473917025bcdc03111a612303fea357f
         env:
           ARMORER_WORKFLOW_READ_TOKEN: ${{ github.token }}
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
