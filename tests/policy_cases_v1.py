@@ -10,6 +10,17 @@ from build_cases import create_fixture
 from build_cases_v3 import extend_fixture
 
 
+def bind_fixture_path_versions(root: Path) -> None:
+    """Give synthetic path dependencies exact package versions so the required wildcard ban remains enforced."""
+    app = root / "app/Cargo.toml"
+    text = app.read_text().replace('{ path = "../extra", optional = true }', '{ version = "=0.1.0", path = "../extra", optional = true }')
+    text = text.replace('{ package = "fixture-platform", path = "../platform" }', '{ package = "fixture-platform", version = "=0.1.0", path = "../platform" }')
+    text = text.replace('fixture-host={path="../host"}', 'fixture-host={version="=0.2.0-alpha.1",path="../host"}')
+    app.write_text(text)
+    other = root / "other/Cargo.toml"
+    other.write_text(other.read_text().replace('fixture-app={path="../app",', 'fixture-app={version="=0.1.0",path="../app",'))
+
+
 def main() -> None:
     """Produce and independently check four actual native report sets; all source identities are synthetic fixtures."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -28,7 +39,7 @@ def main() -> None:
     args.output.mkdir(parents=True, mode=0o700)
     with tempfile.TemporaryDirectory(prefix="armorer-policy-cases-") as temporary:
         parent = Path(temporary); root = parent / "source"; root.mkdir()
-        create_fixture(root, target); extend_fixture(root, target)
+        create_fixture(root, target); extend_fixture(root, target); bind_fixture_path_versions(root)
         (root / "app/build.rs").write_text('fn main() { panic!("consuming policy build scripts must never run"); }\n')
         workflow = root / ".github/workflows/ci.yml"; workflow.parent.mkdir(parents=True)
         workflow.write_text('''name: Independent fixture

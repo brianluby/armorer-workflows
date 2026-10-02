@@ -68,7 +68,9 @@ there is no stale-cache or weaker-policy fallback.
 runtime helper identities, qualified catalog bytes and project policy expectations.
 It bounds and hashes all offered bytes before parsing native reports, requires the
 exact leaf set, and rejects substitutions, missing/extra files, failures, altered
-tools/policy or expired observations. Matching unsigned data establishes consistency
+tools/policy or expired observations.
+The reader also rechecks advisory exception expiry against the current UTC date,
+including an otherwise fresh report crossing midnight. Matching unsigned data establishes consistency
 only. An attacker can forge unsigned observations; provider transport, exact producer
 job/source/workflow authentication and protected trigger/ref/ancestry/actor gates
 must be established separately before finalization. All three authority flags remain

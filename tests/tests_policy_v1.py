@@ -97,6 +97,21 @@ class ReportBoundaryTests(unittest.TestCase):
             with self.assertRaises(common.Failure):
                 policy.verify(directory, *expected, now=1003)
 
+    def test_exception_expiry_is_rechecked_when_a_fresh_report_crosses_utc_midnight(self):
+        """A still-fresh observation cannot preserve an advisory exception after its reviewed expiry date."""
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary); envelope, expected = self.fixture(directory)
+            envelope["observed"] = {"started_at": 86398, "finished_at": 86399}
+            envelope["effective_policy"]["advisories"]["exceptions"] = [
+                {"id": "RUSTSEC-2020-0001", "owner": "fixture", "reason": "synthetic exception", "expires": "1970-01-01"}]
+            database = json.loads((directory / "advisory-db.json").read_bytes()); database["fetched_at"] = 86398
+            data = policy.canonical(database); (directory / "advisory-db.json").write_bytes(data)
+            envelope["reports"]["advisory-db.json"] = pins.identity(data)
+            (directory / "policy-v1.json").write_bytes(policy.canonical(envelope))
+            policy.verify(directory, *expected, now=86399)
+            with self.assertRaises(common.Failure):
+                policy.verify(directory, *expected, now=86401)
+
     def test_every_native_scanner_requires_empty_json_findings(self):
         """A successful process alone cannot turn missing or finding-bearing data into a passing report."""
         for name in policy.NATIVE_REPORTS - {"cargo-deny.jsonl"}:

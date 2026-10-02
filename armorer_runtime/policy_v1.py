@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from datetime import date, datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -390,6 +391,11 @@ def verify(directory: Path, expected_context: dict, expected_selection: dict, ex
             envelope["runtime_inputs"] == expected_runtime_inputs and set(expected_runtime_inputs) == set(RUNTIME_INPUTS) and
             all(pins.byte_identity(value, common.MAX_INPUT) for value in expected_runtime_inputs.values()) and
             expected_selection["toolchain"] == "1.95.0", "policy source/run/selection/policy/runtime mismatch")
+    today = datetime.fromtimestamp(observed_now, timezone.utc).date()
+    for exception in expected_policy["advisories"]["exceptions"]:
+        expires = date.fromisoformat(exception["expires"])
+        require(today <= expires and (expires - today).days <= 90,
+                "policy advisory exception expired or exceeds the current bound")
     require(isinstance(expected_catalog, dict) and set(expected_catalog) == {"catalog", "identity"} and
             envelope["tool_catalog"] == expected_catalog["identity"] and
             set(expected_catalog["catalog"]["tools"]) == pins.NAMES, "independent policy catalog mismatch")
