@@ -162,3 +162,78 @@ jobs:
           '''
           subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "armorer-validator-target/debug/armorer"), "--tool-directory", str(scratch / "armorer-builder-v3-tools")], check=True)
           PY
+
+  policy-evidence:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: runtime-source
+    steps:
+      - name: Checkout runtime under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: runtime-source
+          persist-credentials: false
+      - name: Checkout pinned trusted validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer
+          ref: 1615339b6415afa9bb9d65e2c37304e977158c4e
+          path: validator-source
+          persist-credentials: false
+      - name: Install exact fixture compiler
+        run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
+      - name: Build trusted validator with isolated Cargo state
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          from armorer_runtime import common
+          scratch = Path(os.environ["RUNNER_SCRATCH"])
+          home = scratch / "armorer-validator-home"
+          home.mkdir()
+          env = common.cargo_environment("1.95.0", home, scratch / "armorer-validator-target")
+          common.run(["cargo", "build", "--locked", "--manifest-path", str(Path.cwd().parent / "validator-source" / "Cargo.toml")], cwd=Path.cwd(), env=env)
+          PY
+      - name: Install hash-locked development schema validator
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, subprocess, venv
+          from pathlib import Path
+          environment = Path(os.environ["RUNNER_SCRATCH"]) / "armorer-schema-venv"
+          venv.EnvBuilder(with_pip=True).create(environment)
+          subprocess.run([str(environment / "bin/python"), "-m", "pip", "install", "--require-hashes", "--only-binary=:all:", "-r", "requirements-schema.txt"], check=True)
+          PY
+      - name: Qualify independent native reports without consuming build execution
+        env:
+          POLICY_RECEIPT: ${{ runner.temp }}/armorer-policy-qualification
+          ARMORER_PATH: ${{ runner.temp }}/armorer-validator-target/debug/armorer
+        run: |
+          python3 -I - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          python = Path(os.environ["RUNNER_TEMP"]) / "armorer-schema-venv/bin/python"
+          code = 'import sys; from pathlib import Path; sys.path.insert(0,str(Path.cwd())); sys.path.insert(0,str(Path.cwd()/"tests")); from policy_cases_v1 import main; main()'
+          subprocess.run([str(python), "-I", "-c", code, "--armorer", os.environ["ARMORER_PATH"], "--output", os.environ["POLICY_RECEIPT"]], check=True)
+          code = 'import json, sys; from pathlib import Path; from jsonschema import Draft202012Validator; schema=json.loads(Path("schemas/policy-observation-v1.json").read_text()); v=Draft202012Validator(schema); [v.validate(json.loads(p.read_bytes())) for p in Path(sys.argv[1]).glob("*/policy-v1.json")]'
+          subprocess.run([str(Path(os.environ["RUNNER_TEMP"]) / "armorer-schema-venv/bin/python"), "-I", "-c", code, os.environ["POLICY_RECEIPT"]], check=True)
+          PY
+      - name: Retain native qualification evidence with explicit fixture identities
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: policy-native-v1-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/armorer-policy-qualification/*
+          archive: true
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 14

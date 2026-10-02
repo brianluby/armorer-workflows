@@ -19,3 +19,9 @@ The experimental [Rust builder](.github/workflows/rust-build.yml) produces
 unsigned executables or Cargo source packages with target/feature-specific
 CycloneDX SBOMs and exact byte inventories. Read [builder scope and verification
 limits](docs/build.md); signing, attestations and publication are later gates.
+
+The explicit [independent policy observation workflow](.github/workflows/rust-policy-v1.yml)
+retains qualified native reports and actual advisory input bytes in separate
+unprivileged jobs without executing consuming builds or tests. Read
+[its versioned contract and remaining authentication gates](docs/independent-policy-v1.md)
+before adopting it. Existing CI/build callers remain required.
