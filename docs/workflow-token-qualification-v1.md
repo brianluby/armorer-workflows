@@ -16,6 +16,15 @@ finished. Archives remain private and inert and disappear when the check exits.
 They are not decoded or executed here, and their metadata cannot authenticate the
 job that wrote them.
 
+Hosted qualification observed the provider returning `queued` to fast Linux
+readers while their jobs were already running. Preflight may wait for matching
+pending metadata for at most thirty seconds. Repository, source, caller, run and
+attempt checks apply before waiting; unknown or failed states reject immediately.
+No archive download occurs until the provider reports an active run or completed
+success. A persistent pending state expires rather than earning qualification.
+All later attempt/state/freshness checks remain strict. State diagnostics contain
+only recognized status/conclusion enums, never arbitrary provider values or bodies.
+
 The installer selects only the existing independently qualified GitHub CLI
 2.102.0 native distributions. Archive sizes/hashes are checked before bounded
 tar/ZIP decoding; paths, member types/counts and expansion are checked before

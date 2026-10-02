@@ -185,6 +185,36 @@ class NativeTransportToolTests(unittest.TestCase):
                 qualify(api, expected, {})
             download.assert_not_called()
 
+    def test_matching_pending_metadata_waits_for_active_state_before_archive_reads(self):
+        """Queued provider propagation may wait, but exact active metadata precedes all archive downloads."""
+        expected, run, listing, data = provider()
+        pending = copy.deepcopy(run); pending.update(status="queued", run_started_at=None)
+        api = transport_v1.QualifiedGhApi(Path("/test-owned-gh"), "test-only-token")
+        responses = [pending, run, run, listing, *listing["artifacts"], run, run, listing]
+        with mock.patch.object(api, "json", side_effect=responses), \
+             mock.patch.object(api, "archive", side_effect=lambda repo, ident, path: path.write_bytes(data)) as download, \
+             mock.patch("transport_cases_v1.time.time", return_value=120), mock.patch("transport_cases_v1.time.sleep") as sleep:
+            receipt = qualify(api, expected, {})
+        self.assertEqual(download.call_count, 3)
+        self.assertEqual(sleep.call_count, 1)
+        self.assertFalse(receipt["signing_authorized"])
+
+    def test_pending_deadline_and_foreign_pending_identity_prevent_download(self):
+        """Persistent queued metadata or a foreign identity cannot become an accepted checkpoint."""
+        for case in ("expired", "foreign"):
+            expected, run, _, _ = provider()
+            run.update(status="queued", run_started_at=None)
+            if case == "foreign": run["head_repository"]["id"] += 1
+            api = transport_v1.QualifiedGhApi(Path("/test-owned-gh"), "test-only-token")
+            with mock.patch.object(api, "json", return_value=run), mock.patch.object(api, "archive") as download, \
+                 mock.patch("transport_cases_v1.time.time", return_value=120), \
+                 mock.patch("transport_cases_v1.time.monotonic", side_effect=[0, 31]), \
+                 mock.patch("transport_cases_v1.time.sleep") as sleep, self.assertRaisesRegex(Failure,
+                     "readiness deadline expired" if case == "expired" else "provider repository mismatch"):
+                qualify(api, expected, {})
+            download.assert_not_called()
+            sleep.assert_not_called()
+
     def test_qualification_hash_detail_and_final_rerun_races_reject(self):
         """Authentic storage metadata alone cannot excuse changed archives, records or provider attempts."""
         for case in ("archive", "detail", "rerun", "listing", "expired"):
