@@ -5,7 +5,7 @@ runtime_version = "0.1.0"
 
 [workflows]
 repository = "brianluby/armorer-workflows"
-commit = "daba254508c676f963bed7343c7b6d13284676d0"
+commit = "bd76fe10dfb54b022c1f755b300bd498fa79fe48"
 
 [tools.actionlint--aarch64-apple-darwin]
 version = "1.7.12"
