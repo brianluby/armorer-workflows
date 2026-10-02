@@ -51,3 +51,8 @@ Linux binaries and retains library archives in the strict consumer's fixed
 inventory layout. Native tests compare actual Cargo outputs on all three runners;
 unsigned Apple executables block before staging. A complete layout remains
 unverified until the pinned signer and independent consumer authenticate it.
+
+The internal [artifact writer reader](docs/artifact-writer-v1.md) joins the
+artifact service's uploader identity to native Actions job/check records. Its
+credential-free observations preserve the remaining producer, protection and
+release authentication gates.
