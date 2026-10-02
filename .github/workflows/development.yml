@@ -153,4 +153,12 @@ jobs:
           main()
           '''
           subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "armorer-validator-target/debug/armorer"), "--tool-directory", str(scratch / "armorer-builder-v2-tools")], check=True)
+          code = '''import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from build_cases_v3 import main
+          main()
+          '''
+          subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "armorer-validator-target/debug/armorer"), "--tool-directory", str(scratch / "armorer-builder-v3-tools")], check=True)
           PY
