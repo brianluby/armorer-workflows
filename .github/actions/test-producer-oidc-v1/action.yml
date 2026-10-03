@@ -1,0 +1,5 @@
+name: Test producer OIDC v1 protocol
+description: Run synthetic native RSA fixtures without requesting live credentials or granting release authority
+runs:
+  using: node24
+  main: index.mjs

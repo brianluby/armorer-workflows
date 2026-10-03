@@ -1,0 +1,315 @@
+{
+  "$defs": {
+    "CargoDependency": {
+      "additionalProperties": false,
+      "properties": {
+        "contexts": {
+          "items": {
+            "$ref": "#/$defs/DependencyContext"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "package",
+        "name",
+        "contexts"
+      ],
+      "type": "object"
+    },
+    "CargoNode": {
+      "additionalProperties": false,
+      "properties": {
+        "dependencies": {
+          "items": {
+            "$ref": "#/$defs/CargoDependency"
+          },
+          "type": "array"
+        },
+        "features": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "features",
+        "dependencies"
+      ],
+      "type": "object"
+    },
+    "CargoPackage": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "DependencyContext": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/DependencyKind"
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "DependencyKind": {
+      "enum": [
+        "normal",
+        "build"
+      ],
+      "type": "string"
+    },
+    "GraphGap": {
+      "enum": [
+        "native-and-system-libraries-not-fully-inventoried",
+        "cargo-host-target-aggregated-by-package-id"
+      ],
+      "type": "string"
+    },
+    "GraphInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "Cargo.lock": {
+          "type": "string"
+        },
+        "armorer.lock": {
+          "type": "string"
+        },
+        "armorer.toml": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "armorer.toml",
+        "armorer.lock",
+        "Cargo.lock"
+      ],
+      "type": "object"
+    },
+    "GraphScope": {
+      "enum": [
+        "compiled-cargo-target-and-host-build-dependencies"
+      ],
+      "type": "string"
+    },
+    "GraphSource": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "commit"
+      ],
+      "type": "object"
+    },
+    "NativeLinkage": {
+      "additionalProperties": false,
+      "properties": {
+        "linked_libraries": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "package_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_id",
+        "linked_libraries"
+      ],
+      "type": "object"
+    },
+    "Profile": {
+      "enum": [
+        "library",
+        "cli",
+        "service"
+      ],
+      "type": "string"
+    },
+    "Selection": {
+      "additionalProperties": false,
+      "properties": {
+        "binary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_features": {
+          "type": "boolean"
+        },
+        "deliverable_id": {
+          "type": "string"
+        },
+        "feature_set": {
+          "type": "string"
+        },
+        "features": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "package": {
+          "type": "string"
+        },
+        "package_version": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/Profile"
+        },
+        "target": {
+          "type": "string"
+        },
+        "toolchain": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deliverable_id",
+        "profile",
+        "package",
+        "package_version",
+        "target",
+        "feature_set",
+        "default_features",
+        "features",
+        "toolchain"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "coverage_gaps": {
+      "items": {
+        "$ref": "#/$defs/GraphGap"
+      },
+      "type": "array"
+    },
+    "graph_scope": {
+      "$ref": "#/$defs/GraphScope"
+    },
+    "input_sha256": {
+      "$ref": "#/$defs/GraphInputs"
+    },
+    "native_linkage": {
+      "items": {
+        "$ref": "#/$defs/NativeLinkage"
+      },
+      "type": "array"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/CargoNode"
+      },
+      "type": "array"
+    },
+    "packages": {
+      "items": {
+        "$ref": "#/$defs/CargoPackage"
+      },
+      "type": "array"
+    },
+    "root": {
+      "type": "string"
+    },
+    "root_component_name": {
+      "type": "string"
+    },
+    "run_attempt": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "run_id": {
+      "description": "Null identifies an unhosted development fixture and cannot satisfy release verification.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "runtime_commit": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "maximum": 2,
+      "minimum": 2,
+      "type": "integer"
+    },
+    "selection": {
+      "$ref": "#/$defs/Selection"
+    },
+    "source": {
+      "$ref": "#/$defs/GraphSource"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source",
+    "runtime_commit",
+    "input_sha256",
+    "selection",
+    "root_component_name",
+    "root",
+    "packages",
+    "nodes",
+    "native_linkage",
+    "graph_scope",
+    "coverage_gaps"
+  ],
+  "title": "CargoGraphV2",
+  "type": "object"
+}

@@ -1,0 +1,5 @@
+name: Qualify producer worker v1
+description: Qualify fixed worker paths with native read-only APIs without live OIDC or release authority
+runs:
+  using: node24
+  main: index.mjs

@@ -1,0 +1,94 @@
+{
+  "schema_version": 2,
+  "source": {
+    "repository": "fixture/graph",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "runtime_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "run_id": 17,
+  "run_attempt": 2,
+  "input_sha256": {
+    "armorer.toml": "1111111111111111111111111111111111111111111111111111111111111111",
+    "armorer.lock": "2222222222222222222222222222222222222222222222222222222222222222",
+    "Cargo.lock": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "selection": {
+    "deliverable_id": "app",
+    "profile": "cli",
+    "package": "app",
+    "package_version": "0.1.0",
+    "binary": "app",
+    "target": "x86_64-unknown-linux-gnu",
+    "feature_set": "optional",
+    "default_features": false,
+    "features": [
+      "extra"
+    ],
+    "toolchain": "1.95.0"
+  },
+  "root_component_name": "app",
+  "root": "app",
+  "packages": [
+    {
+      "id": "app",
+      "name": "app",
+      "version": "0.1.0"
+    },
+    {
+      "id": "dep",
+      "name": "optional-dep",
+      "version": "0.1.0"
+    },
+    {
+      "id": "host",
+      "name": "host-build",
+      "version": "0.2.0-alpha.1"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "app",
+      "features": [
+        "extra"
+      ],
+      "dependencies": [
+        {
+          "package": "dep",
+          "name": "optional_dep",
+          "contexts": [
+            {
+              "kind": "normal",
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "host",
+          "name": "host_build",
+          "contexts": [
+            {
+              "kind": "build",
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dep",
+      "features": [],
+      "dependencies": []
+    },
+    {
+      "id": "host",
+      "features": [],
+      "dependencies": []
+    }
+  ],
+  "native_linkage": [],
+  "graph_scope": "compiled-cargo-target-and-host-build-dependencies",
+  "coverage_gaps": [
+    "native-and-system-libraries-not-fully-inventoried",
+    "cargo-host-target-aggregated-by-package-id"
+  ]
+}

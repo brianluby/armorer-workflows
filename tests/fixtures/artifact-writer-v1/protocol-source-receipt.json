@@ -1,0 +1,31 @@
+{
+  "official_repository": "actions/toolkit",
+  "commit": "6cb87687384f971ebb756e43c7a56f62cd80a31d",
+  "files": {
+    "packages/artifact/src/internal/shared/util.ts": {
+      "blob": "f60ea691b69440c2e6a561e925413bb965db1beb",
+      "sha256": "6b1b3e5be068442ce0319dcfa900494f281581f6a6c104319ecee95952624953",
+      "size": 4226
+    },
+    "packages/artifact/src/internal/shared/config.ts": {
+      "blob": "0a275fd5eeb4f84986925720b05b176689adaa53",
+      "sha256": "6152112cf242216c339f05b58b429a2296091d6450dc24ac4ee591a827780b4e",
+      "size": 3365
+    },
+    "packages/artifact/src/internal/shared/artifact-twirp-client.ts": {
+      "blob": "04958a7840e38fc321497c2d8e9ae8037d53c15e",
+      "sha256": "0db3bc76b7f23b07c1625f391541229a2beb953cfabd597164bb00eaebb7e0f1",
+      "size": 5978
+    },
+    "packages/artifact/src/generated/results/api/v1/artifact.ts": {
+      "blob": "dbdd7bbb7ae3a1932bed8e877d82a235873ed08b",
+      "sha256": "f2acae2574b3e5be39b6449d465d0063fcc83d8521d163634c23f0d63654700b",
+      "size": 46064
+    },
+    "packages/artifact/src/internal/find/list-artifacts.ts": {
+      "blob": "3f48d9d6e21f90f46d674e26bf02be4434cfa927",
+      "sha256": "db144334ab6181fdb570a2ccafa74c21bf6de64ac093f6f5691a9cf53a8556cd",
+      "size": 5557
+    }
+  }
+}

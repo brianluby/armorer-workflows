@@ -1,0 +1,54 @@
+name: Native release prerequisite qualification v1
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capability-evidence:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout qualification code without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Qualify native prerequisites without administrative credentials
+        env:
+          ARMORER_READ_TOKEN: ${{ github.token }}
+          EXPECTED_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          GH_DEBUG: api
+          GITHUB_TOKEN: test-only-unrelated-token
+          HTTP_PROXY: http://test-only.invalid:9
+        run: |
+          python3 -I - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from capability_cases_v1 import main
+          main()
+          PY
+      - name: Retain genuine native prerequisite observations
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: capability-native-v1-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/armorer-capability-qualification-v1/receipt.json
+          archive: true
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 14

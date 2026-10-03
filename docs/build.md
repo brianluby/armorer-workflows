@@ -94,6 +94,31 @@ clues, but native and system libraries are not fully inventoried. These limits
 are explicit coverage gaps. macOS bytes here remain unsigned and unnotarized;
 they must never be attested as final signed/notarized release bytes.
 
+## Selected graph successor
+
+The explicit `rust-build-v2.yml` entry point retains a version-two selected
+graph and emits `build-inventory-v2.json` with `cargo_graph_version: 2`. Adopt
+it only through a reviewed full workflow commit and corresponding lock update.
+The original workflow, inventory schema and feature-only graph remain v1.
+`build_v2` and `verify_inventory_v2` use fixed v2 contracts; neither reader
+infers an upgrade or retries the other version after a verification failure.
+
+The retained graph binds source/runtime/run identities, all three configuration
+and lock digests, typed selection and actual root target name. It retains opaque
+package IDs, canonical versions, activated features and each normal/build edge
+with its Cargo target context. The independent expected root name and resolved
+package version are mandatory reader arguments. Dependency prerelease versions
+are preserved; the selected root follows the stable v1 version contract.
+
+The pinned generator marks build-only dependencies and their descendants with
+`excluded` runtime scope. They remain required entries in the build graph and
+SBOM. Both graph readers derive scope from dependency paths: a normal path takes
+precedence when a package also has build uses. Missing/altered components or
+edges still fail, and scope substitutions fail independently. Native linkage
+and host/target aggregation limits remain explicit coverage gaps. This unsigned
+successor does not provide an authenticated complete-release consumer or final
+macOS signing/notarization.
+
 ## Validation and recovery
 
 Unit failure tests cover workspace feature over-inclusion, optional edges to
@@ -112,6 +137,21 @@ After building the pinned trusted Armorer validator, run
 They construct a temporary five-crate workspace and exercise minimal and
 optional-feature applications, a target-gated dependency and a zero-dependency
 library with a custom target name. No pilot repository is modified.
+
+`tests/build_cases_v2.py` additionally builds a service case and a real host
+build dependency, including a prerelease dependency version, on each native
+hosted runner. Use the same CLI arguments and a separate new tool directory;
+optionally supply `--receipt-directory /absolute/path/to/new-receipts` to retain
+output for the Rust reader's explicit interoperability test. Those receipts
+record unsigned output and synthetic fixture run 17/attempt 2. They do not
+establish platform attestation or release acceptance.
+
+The repository's synthetic rehearsal callers select the same exact candidate
+runtime commit for both v1 and v2, with the matching workflow pin in its fixture
+lock. They exercise all nine profile/target selections through the actual
+reusable workflows, with separate artifact namespaces. This is an explicit
+development-fixture pin change, not accepted adopter catalog migration. These
+jobs have read-only repository permission and produce unsigned evidence only.
 
 Failed commands terminate their Unix process group and clean temporary build
 directories. A failed attempt publishes no release. Retry in a fresh workflow
