@@ -1,0 +1,19 @@
+name: momus
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    uses: brianluby/momus-review/.github/workflows/review.yml@bb64d2f3b09c32cce75ced029fd1065f0e34ef61 # v0.9.0
+    with:
+      version: v0.9.0
+      verify-attestations: required
+      fail-on-blocking: false
+    secrets:
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
