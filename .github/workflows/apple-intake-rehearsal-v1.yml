@@ -1,0 +1,108 @@
+name: Unsigned Apple intake rehearsal v1
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-intake:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      RUSTUP_TOOLCHAIN: 1.95.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer
+          ref: cd47288b3b17268af079e882614431f7520caec3
+          path: fixture-validator
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer-workflows
+          ref: 8c5079d915068c058a8b814d22b1987dcfa6b005
+          path: fixture-runtime-controls
+          persist-credentials: false
+      - name: Install exact fixture compiler
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Build fixed credential-free fixture validator
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import hashlib, importlib.util, os, shutil, sys
+          from pathlib import Path
+          controls = Path.cwd() / "fixture-runtime-controls/armorer_runtime/common.py"
+          assert controls.is_file() and not controls.is_symlink()
+          assert hashlib.sha256(controls.read_bytes()).hexdigest() == "caff29c7ae2e9b98d5ac135db1bba3a75a9a179ae865f3ad4b0b95ba4f86f25f"
+          spec = importlib.util.spec_from_file_location("fixed_intake_controls", controls)
+          fixed = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = fixed
+          spec.loader.exec_module(fixed)
+          source = Path.cwd() / "fixture-validator"
+          scratch = Path(os.environ["RUNNER_SCRATCH"]).resolve(strict=True)
+          destination = scratch / "apple-intake-validator-source"
+          cargo_home = scratch / "apple-intake-validator-cargo"
+          target = scratch / "apple-intake-validator-target"
+          assert not scratch.is_relative_to(Path.cwd().resolve())
+          assert source.is_dir() and not source.is_symlink()
+          assert all(not path.exists() and not path.is_symlink() for path in (destination, cargo_home, target))
+          fixed.reject_cargo_configuration(destination)
+          # Remove the fixed auxiliary checkout so native runtime checks remain clean.
+          fixed_source = scratch / "apple-intake-runtime-controls"
+          assert not fixed_source.exists() and not fixed_source.is_symlink()
+          shutil.move(str(Path.cwd() / "fixture-runtime-controls"), str(fixed_source))
+          # Cargo searches cwd ancestry even with an absolute manifest path.
+          shutil.move(str(source), str(destination))
+          fixed.reject_cargo_configuration(destination)
+          environment = fixed.cargo_environment("1.95.0", cargo_home, target)
+          cargo = Path(environment["RUSTC"]).with_name("cargo")
+          fixed.run([str(cargo), "build", "--locked", "--manifest-path", str(destination / "Cargo.toml")],
+                    cwd=destination, env=environment)
+          PY
+      - name: Qualify complete native unsigned handoffs without executing payloads
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, subprocess, sys, venv
+          from pathlib import Path
+          scratch = Path(os.environ["RUNNER_SCRATCH"])
+          environment = scratch / "apple-intake-schema-venv"
+          venv.EnvBuilder(with_pip=True).create(environment)
+          python = environment / "bin/python"
+          subprocess.run([str(python), "-m", "pip", "install", "--require-hashes", "--only-binary=:all:", "-r", "requirements-schema.txt"], check=True)
+          code = '''import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from final_payload_cases_v1 import main
+          main()
+          '''
+          subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "apple-intake-validator-target/debug/armorer"),
+                          "--tool-directory", str(scratch / "apple-intake-native-tools"),
+                          "--receipt-directory", str(scratch / "apple-intake-native-receipts")], check=True)
+          PY
+      - name: Retain inert native bytes and fixture-only source/run receipts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: apple-intake-native-v1-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/apple-intake-native-receipts/
+          if-no-files-found: error
+          retention-days: 7

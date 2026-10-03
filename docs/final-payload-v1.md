@@ -32,6 +32,9 @@ An unsigned Apple executable blocks the entire set before staging. Libraries
 associated with the macOS target remain source archives. The protected Apple
 backend must produce and authenticate the required sign/notarize/package chain;
 Linux success cannot substitute for that gate.
+The separate [unsigned Apple intake](apple-payload-intake-v1.md) first freezes the
+whole v3 set and inspects its native ARM64 executable structure. Its success
+retains input identities without changing this final-output gate.
 
 ## Assembly order
 
