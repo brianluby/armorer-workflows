@@ -12,6 +12,7 @@ from unittest import mock
 from armorer_runtime import controller_context_v1 as controller
 from armorer_runtime import producer_job_worker_v1 as worker
 from armorer_runtime import source_transport_v1 as source
+from armorer_runtime import transport_v1 as transport
 from armorer_runtime.common import Failure
 
 
@@ -58,6 +59,10 @@ class NativeCleanupTests(unittest.TestCase):
     def test_source_reader_reaps_exited_leader_descendant(self):
         """The source adapter kills a surviving pipe holder after its leader exits."""
         self.assert_descendant_reaped(source.SourceGhApi)
+
+    def test_artifact_reader_reaps_exited_leader_descendant(self):
+        """The shared artifact reader also kills a pipe holder after its leader exits."""
+        self.assert_descendant_reaped(transport.QualifiedGhApi)
 
     def test_controller_reader_reaps_exited_leader_descendant(self):
         """The controller adapter kills a surviving pipe holder after its leader exits."""
