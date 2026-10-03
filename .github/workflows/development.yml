@@ -26,9 +26,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Native Node 24 producer OIDC protocol fixtures without live token requests
-        uses: brianluby/armorer-workflows/.github/actions/test-producer-oidc-v1@a67a01b07ba40ca00112808c22f4e89763f516ea
+        uses: brianluby/armorer-workflows/.github/actions/test-producer-oidc-v1@9980f975d4cf222a3a52d0eece718bbfb79ca126
       - name: Native Node 24 independent mapped-producer fixtures without live OIDC
-        uses: brianluby/armorer-workflows/.github/actions/test-mapped-producer-v1@9427f8ce06a4392bf906adb37dc9293511e55382
+        uses: brianluby/armorer-workflows/.github/actions/test-mapped-producer-v1@9980f975d4cf222a3a52d0eece718bbfb79ca126
       - name: Native Node 24 artifact writer rejection fixtures without live credentials
         uses: brianluby/armorer-workflows/.github/actions/test-artifact-writer-v1@c4241879473917025bcdc03111a612303fea357f
       - name: Native Node 24 combined archive and private writer join regressions
@@ -131,6 +131,7 @@ jobs:
       - name: Verify inventory failure cases and real native Cargo SBOMs
         env:
           RUNNER_SCRATCH: ${{ runner.temp }}
+          ARMORER_TEST_NETWORK: "1"
         run: |
           python3 -I - <<'PY'
           import os, subprocess
