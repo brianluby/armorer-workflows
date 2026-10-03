@@ -1,4 +1,4 @@
-name: Synthetic unsigned build rehearsal
+name: Unsigned independent policy v1 caller rehearsal
 
 on:
   pull_request:
@@ -15,4 +15,4 @@ concurrency:
 
 jobs:
   reusable:
-    uses: brianluby/armorer-workflows/.github/workflows/rust-build.yml@59a2e782150abff3f995682013d514e6865d8dfb
+    uses: brianluby/armorer-workflows/.github/workflows/rust-policy-v1.yml@59a2e782150abff3f995682013d514e6865d8dfb

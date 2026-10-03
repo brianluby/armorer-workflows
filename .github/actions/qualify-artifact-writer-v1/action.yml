@@ -1,0 +1,5 @@
+name: Qualify artifact writer mapping v1
+description: Read native job/check and artifact-service records without OIDC, signing or publication
+runs:
+  using: node24
+  main: index.mjs

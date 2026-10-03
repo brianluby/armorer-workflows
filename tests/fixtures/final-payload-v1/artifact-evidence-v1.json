@@ -1,0 +1,597 @@
+{
+  "$defs": {
+    "AppleAssertions": {
+      "additionalProperties": false,
+      "description": "Apple values remain producer assertions until independently checked on macOS.",
+      "properties": {
+        "certificate_sha256": {
+          "type": "string"
+        },
+        "hardened_runtime": {
+          "type": "boolean"
+        },
+        "notarization_log": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "notarization_outcome": {
+          "$ref": "#/$defs/Outcome"
+        },
+        "notarization_submission_id": {
+          "type": "string"
+        },
+        "secure_timestamp": {
+          "type": "boolean"
+        },
+        "team_id": {
+          "type": "string"
+        },
+        "ticket_mode": {
+          "$ref": "#/$defs/AppleTicketMode"
+        }
+      },
+      "required": [
+        "team_id",
+        "certificate_sha256",
+        "hardened_runtime",
+        "secure_timestamp",
+        "notarization_submission_id",
+        "notarization_outcome",
+        "notarization_log",
+        "ticket_mode"
+      ],
+      "type": "object"
+    },
+    "AppleTicketMode": {
+      "enum": [
+        "online-standalone-mach-o",
+        "stapled-package"
+      ],
+      "type": "string"
+    },
+    "BuildStep": {
+      "additionalProperties": false,
+      "properties": {
+        "finished_at": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/ByteIdentity"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/StepKind"
+        },
+        "outcome": {
+          "$ref": "#/$defs/Outcome"
+        },
+        "output": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "platform_evidence": {
+          "description": "Digest of separately retained platform evidence, not a trust boolean.\n#8/#9 must authenticate these bytes and their subject/source identities.",
+          "items": {
+            "$ref": "#/$defs/ByteIdentity"
+          },
+          "type": "array"
+        },
+        "run": {
+          "$ref": "#/$defs/RunIdentity"
+        },
+        "started_at": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "inputs",
+        "output",
+        "run",
+        "started_at",
+        "finished_at",
+        "outcome",
+        "platform_evidence"
+      ],
+      "type": "object"
+    },
+    "ByteIdentity": {
+      "additionalProperties": false,
+      "description": "An exact byte identity, independent of a filename or producer claim.",
+      "properties": {
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "maximum": 1073741824,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "CapabilityId": {
+      "enum": [
+        "platform-attestations",
+        "immutable-releases",
+        "protected-tags",
+        "protected-publish-environment",
+        "protected-signing-environment",
+        "apple-signing",
+        "cargo-sbom",
+        "dependency-policy",
+        "codeql",
+        "cargo-vet",
+        "embedded-metadata",
+        "native-sbom",
+        "linux-egress",
+        "independent-rebuild",
+        "scorecard",
+        "dist-build",
+        "registry-publish"
+      ],
+      "type": "string"
+    },
+    "Coverage": {
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "$ref": "#/$defs/CapabilityId"
+        },
+        "enforcement": {
+          "$ref": "#/$defs/Enforcement"
+        },
+        "exception_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "omissions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outcome": {
+          "$ref": "#/$defs/Outcome"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "tested_subject": {
+          "$ref": "#/$defs/ByteIdentity"
+        }
+      },
+      "required": [
+        "capability",
+        "scope",
+        "tested_subject",
+        "omissions",
+        "outcome",
+        "enforcement",
+        "exception_ids"
+      ],
+      "type": "object"
+    },
+    "Enforcement": {
+      "enum": [
+        "disabled",
+        "not-tested",
+        "skipped",
+        "reporting",
+        "enforced"
+      ],
+      "type": "string"
+    },
+    "Exception": {
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "$ref": "#/$defs/CapabilityId"
+        },
+        "id": {
+          "type": "string"
+        },
+        "policy": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "positive_control": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "review": {
+          "$ref": "#/$defs/Review"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "subject": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "tool_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "capability",
+        "tool",
+        "rule",
+        "tool_version",
+        "subject",
+        "policy",
+        "review",
+        "positive_control"
+      ],
+      "type": "object"
+    },
+    "InputIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "cargo_lock_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "config_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "lock_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "run": {
+          "$ref": "#/$defs/RunIdentity"
+        },
+        "runtime": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "runtime_version": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        }
+      },
+      "required": [
+        "source",
+        "config_sha256",
+        "lock_sha256",
+        "cargo_lock_sha256",
+        "runtime",
+        "runtime_version",
+        "run"
+      ],
+      "type": "object"
+    },
+    "InputKind": {
+      "enum": [
+        "tool",
+        "action",
+        "helper",
+        "database",
+        "query-pack",
+        "schema",
+        "policy",
+        "native-input"
+      ],
+      "type": "string"
+    },
+    "Outcome": {
+      "enum": [
+        "passed",
+        "failed",
+        "unknown",
+        "unsupported",
+        "error",
+        "skipped",
+        "not-tested"
+      ],
+      "type": "string"
+    },
+    "Profile": {
+      "enum": [
+        "library",
+        "cli",
+        "service"
+      ],
+      "type": "string"
+    },
+    "Review": {
+      "additionalProperties": false,
+      "description": "Review records bind a policy decision; their contents do not prove review occurred.",
+      "properties": {
+        "expires_at": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "record": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "reviewed_at": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "owner",
+        "rationale",
+        "reviewed_at",
+        "expires_at",
+        "record"
+      ],
+      "type": "object"
+    },
+    "RunIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "id": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workflow": {
+          "$ref": "#/$defs/WorkflowIdentity"
+        }
+      },
+      "required": [
+        "id",
+        "attempt",
+        "workflow"
+      ],
+      "type": "object"
+    },
+    "Selection": {
+      "additionalProperties": false,
+      "properties": {
+        "binary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_features": {
+          "type": "boolean"
+        },
+        "deliverable_id": {
+          "type": "string"
+        },
+        "feature_set": {
+          "type": "string"
+        },
+        "features": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "package": {
+          "type": "string"
+        },
+        "package_version": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/Profile"
+        },
+        "target": {
+          "type": "string"
+        },
+        "toolchain": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deliverable_id",
+        "profile",
+        "package",
+        "package_version",
+        "target",
+        "feature_set",
+        "default_features",
+        "features",
+        "toolchain"
+      ],
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "git_ref": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "commit",
+        "git_ref"
+      ],
+      "type": "object"
+    },
+    "StepKind": {
+      "enum": [
+        "build",
+        "sign",
+        "notarize",
+        "package"
+      ],
+      "type": "string"
+    },
+    "ToolEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "authentication_record": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "bytes": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "kind": {
+          "$ref": "#/$defs/InputKind"
+        },
+        "max_age_seconds": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "version",
+        "bytes",
+        "authentication_record",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "WorkflowIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "path",
+        "commit"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apple_assertions": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AppleAssertions"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "catalog": {
+      "$ref": "#/$defs/ByteIdentity"
+    },
+    "coverage": {
+      "items": {
+        "$ref": "#/$defs/Coverage"
+      },
+      "type": "array"
+    },
+    "exceptions": {
+      "items": {
+        "$ref": "#/$defs/Exception"
+      },
+      "type": "array"
+    },
+    "inputs": {
+      "$ref": "#/$defs/InputIdentity"
+    },
+    "recorded_at": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "runner_image": {
+      "description": "Mutable hosted image identity, never a reproducibility guarantee.",
+      "type": "string"
+    },
+    "runner_label": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "selection": {
+      "$ref": "#/$defs/Selection"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/BuildStep"
+      },
+      "type": "array"
+    },
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/ToolEvidence"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "inputs",
+    "selection",
+    "catalog",
+    "runner_label",
+    "runner_image",
+    "recorded_at",
+    "tools",
+    "coverage",
+    "exceptions",
+    "steps"
+  ],
+  "title": "ArtifactEvidence",
+  "type": "object"
+}

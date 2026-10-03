@@ -25,6 +25,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Native Node 24 producer OIDC protocol fixtures without live token requests
+        uses: brianluby/armorer-workflows/.github/actions/test-producer-oidc-v1@a67a01b07ba40ca00112808c22f4e89763f516ea
+      - name: Native Node 24 independent mapped-producer fixtures without live OIDC
+        uses: brianluby/armorer-workflows/.github/actions/test-mapped-producer-v1@9427f8ce06a4392bf906adb37dc9293511e55382
+      - name: Native Node 24 artifact writer rejection fixtures without live credentials
+        uses: brianluby/armorer-workflows/.github/actions/test-artifact-writer-v1@c4241879473917025bcdc03111a612303fea357f
+      - name: Native Node 24 combined archive and private writer join regressions
+        uses: brianluby/armorer-workflows/.github/actions/test-combined-handoff-v1@1659d9de38a5078bbf067b489f5c0424cb8e7972
       - name: Install exact fixture compiler
         run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
       - name: Install reviewed native audit tools
@@ -89,7 +97,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: brianluby/armorer
-          ref: 1615339b6415afa9bb9d65e2c37304e977158c4e
+          ref: 56d7380a5534583b7973b5eedc55a1223b46b60e
           path: validator-source
           persist-credentials: false
       - name: Install exact fixture compiler
@@ -145,4 +153,207 @@ jobs:
           main()
           '''
           subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "armorer-validator-target/debug/armorer"), "--tool-directory", str(scratch / "armorer-builder-tools")], check=True)
+          code = '''import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from build_cases_v2 import main
+          main()
+          '''
+          subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "armorer-validator-target/debug/armorer"), "--tool-directory", str(scratch / "armorer-builder-v2-tools")], check=True)
+          code = '''import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from build_cases_v3 import main
+          main()
+          '''
+          subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "armorer-validator-target/debug/armorer"), "--tool-directory", str(scratch / "armorer-builder-v3-tools")], check=True)
           PY
+      - name: Qualify actual final payload bytes and explicit Apple executable blocks
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          scratch = Path(os.environ["RUNNER_SCRATCH"])
+          python = scratch / "armorer-schema-venv/bin/python"
+          code = '''import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from final_payload_cases_v1 import main
+          main()
+          '''
+          subprocess.run([str(python), "-I", "-c", code, "--armorer", str(scratch / "armorer-validator-target/debug/armorer"), "--tool-directory", str(scratch / "armorer-final-payload-tools"), "--receipt-directory", str(scratch / "armorer-final-payload-receipts")], check=True)
+          PY
+
+  policy-evidence:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: runtime-source
+    steps:
+      - name: Checkout runtime under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: runtime-source
+          persist-credentials: false
+      - name: Checkout pinned trusted validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer
+          ref: 56d7380a5534583b7973b5eedc55a1223b46b60e
+          path: validator-source
+          persist-credentials: false
+      - name: Install exact fixture compiler
+        run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
+      - name: Build trusted validator with isolated Cargo state
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          from armorer_runtime import common
+          scratch = Path(os.environ["RUNNER_SCRATCH"])
+          home = scratch / "armorer-validator-home"
+          home.mkdir()
+          env = common.cargo_environment("1.95.0", home, scratch / "armorer-validator-target")
+          common.run(["cargo", "build", "--locked", "--manifest-path", str(Path.cwd().parent / "validator-source" / "Cargo.toml")], cwd=Path.cwd(), env=env)
+          PY
+      - name: Install hash-locked development schema validator
+        env:
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, subprocess, venv
+          from pathlib import Path
+          environment = Path(os.environ["RUNNER_SCRATCH"]) / "armorer-schema-venv"
+          venv.EnvBuilder(with_pip=True).create(environment)
+          subprocess.run([str(environment / "bin/python"), "-m", "pip", "install", "--require-hashes", "--only-binary=:all:", "-r", "requirements-schema.txt"], check=True)
+          PY
+      - name: Qualify independent native reports without consuming build execution
+        env:
+          POLICY_RECEIPT: ${{ runner.temp }}/armorer-policy-qualification
+          ARMORER_PATH: ${{ runner.temp }}/armorer-validator-target/debug/armorer
+        run: |
+          python3 -I - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          python = Path(os.environ["RUNNER_TEMP"]) / "armorer-schema-venv/bin/python"
+          code = 'import sys; from pathlib import Path; sys.path.insert(0,str(Path.cwd())); sys.path.insert(0,str(Path.cwd()/"tests")); from policy_cases_v1 import main; main()'
+          subprocess.run([str(python), "-I", "-c", code, "--armorer", os.environ["ARMORER_PATH"], "--output", os.environ["POLICY_RECEIPT"]], check=True)
+          code = 'import json, sys; from pathlib import Path; from jsonschema import Draft202012Validator; schema=json.loads(Path("schemas/policy-observation-v1.json").read_text()); v=Draft202012Validator(schema); [v.validate(json.loads(p.read_bytes())) for p in Path(sys.argv[1]).glob("*/policy-v1.json")]'
+          subprocess.run([str(Path(os.environ["RUNNER_TEMP"]) / "armorer-schema-venv/bin/python"), "-I", "-c", code, os.environ["POLICY_RECEIPT"]], check=True)
+          PY
+      - name: Retain native qualification evidence with explicit fixture identities
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: policy-native-v1-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/armorer-policy-qualification/*
+          archive: true
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 14
+
+  transport-evidence:
+    needs: [policy-evidence]
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout adapter under test without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Qualify exact source and caller ancestry with the native read token
+        if: github.event_name == 'pull_request'
+        env:
+          ARMORER_READ_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+          EXPECTED_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          GH_DEBUG: api
+          GITHUB_TOKEN: test-only-unrelated-token
+          HTTP_PROXY: http://test-only.invalid:9
+        run: |
+          python3 -I - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from source_cases_v1 import main
+          main()
+          PY
+      - name: Qualify independently mapped current job with native read-only APIs
+        if: github.event_name == 'pull_request'
+        env:
+          ARMORER_READ_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+          EXPECTED_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          EXPECTED_RUNNER_LABEL: ${{ matrix.runner }}
+          GH_DEBUG: api
+          GITHUB_TOKEN: test-only-unrelated-token
+          HTTP_PROXY: http://test-only.invalid:9
+        run: |
+          python3 -I - <<'PYTHON'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from controller_cases_v1 import main
+          main()
+          PYTHON
+      - name: Qualify fixed producer worker on the native Node 24 runtime
+        if: github.event_name == 'pull_request'
+        uses: brianluby/armorer-workflows/.github/actions/qualify-producer-worker-v1@9427f8ce06a4392bf906adb37dc9293511e55382
+        env:
+          ARMORER_WORKFLOW_READ_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+          EXPECTED_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          EXPECTED_RUNNER_LABEL: ${{ matrix.runner }}
+          GH_DEBUG: api
+          GITHUB_TOKEN: test-only-unrelated-token
+          HTTP_PROXY: http://test-only.invalid:9
+      - name: Qualify pinned native GETs with an isolated workflow read token
+        env:
+          ARMORER_READ_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_BRANCH: ${{ github.head_ref || github.ref_name }}
+          GH_DEBUG: api
+          GITHUB_TOKEN: test-only-unrelated-token
+          HTTP_PROXY: http://test-only.invalid:9
+        run: |
+          python3 -I - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          sys.path.insert(0, str(Path.cwd() / "tests"))
+          from transport_cases_v1 import main
+          main()
+          PY
+      - name: Qualify actual artifact uploader mappings from native provider records
+        uses: brianluby/armorer-workflows/.github/actions/qualify-artifact-writer-v1@c4241879473917025bcdc03111a612303fea357f
+        env:
+          ARMORER_WORKFLOW_READ_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_BRANCH: ${{ github.head_ref || github.ref_name }}
+          EXPECTED_RUNNER_LABEL: ${{ matrix.runner }}
