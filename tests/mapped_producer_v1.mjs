@@ -15,8 +15,9 @@ const AUDIENCE = 'armorer:producer-context:v1';
 const keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const foreign = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const originals = { fetch: globalThis.fetch, clock: Date.now, spawn: childProcess.spawn };
+const transportNames = ['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'NODE_TLS_REJECT_UNAUTHORIZED', 'NODE_USE_ENV_PROXY'];
 const envNames = ['ACTIONS_ID_TOKEN_REQUEST_URL', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ARMORER_WORKFLOW_READ_TOKEN',
-  'APPLE_CERTIFICATE', 'GH_TOKEN', 'GH_DEBUG', 'HTTP_PROXY', 'PYTHONPATH', 'NODE_OPTIONS'];
+  'APPLE_CERTIFICATE', 'GH_TOKEN', 'GH_DEBUG', 'HTTP_PROXY', 'PYTHONPATH', ...transportNames];
 const originalEnvironment = new Map(envNames.map(name => [name, process.env[name]]));
 const target = process.platform === 'darwin' ? {
   label: 'macos-15', python: '/opt/homebrew/bin/python3', name: 'aarch64-apple-darwin', size: 39834784,
@@ -135,7 +136,10 @@ beforeEach(function prepare() {
   process.env.ACTIONS_ID_TOKEN_REQUEST_URL = SERVICE;
   process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = 'synthetic-issuer-credential';
   process.env.ARMORER_WORKFLOW_READ_TOKEN = 'synthetic-native-read-token';
-  for (const name of envNames.slice(3)) process.env[name] = 'unrelated-ambient-marker';
+  for (const name of envNames.slice(3).filter(name => !transportNames.includes(name))) {
+    process.env[name] = 'unrelated-ambient-marker';
+  }
+  for (const name of transportNames) delete process.env[name];
   globalThis.fetch = syntheticFetch;
   /** Supply a fixed test-only clock without changing production deadline behavior. */
   Date.now = function fixedClock() { return CLOCK * 1000; };
@@ -190,6 +194,21 @@ test('independent native mapping joins signed check-run identity without grantin
   }
   assert.ok(Object.isFrozen(audit.native_job));
   assert.equal(/synthetic-.*credential|native-read-token|provider-secret/.test(JSON.stringify(audit)), false);
+});
+
+/** A native mapping cannot bypass the token helper's transport boundary or reach either issuer endpoint. */
+test('inherited transport overrides cannot join an OIDC context', async function transportEnvironment() {
+  for (const name of transportNames) {
+    try {
+      for (const value of ['', 'synthetic-transport-override']) {
+        process.env[name] = value;
+        await denied();
+        assert.equal(scenario.requests.length, 0);
+      }
+    } finally {
+      delete process.env[name];
+    }
+  }
 });
 
 /** Unsafe caller policy must fail before any native child, token request or issuer lookup. */

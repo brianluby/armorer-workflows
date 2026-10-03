@@ -345,6 +345,10 @@ class VerifiedProducerContext {
 
 /** Authenticate the current trusted job with fixed-origin RS256 OIDC; never accept a caller token or keyset. */
 export async function authenticateProducerContext(offered) {
+  // Node applies some transport overrides at startup; removing them here cannot restore trust.
+  for (const name of ['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'NODE_TLS_REJECT_UNAUTHORIZED', 'NODE_USE_ENV_PROXY']) {
+    requireCondition(process.env[name] === undefined, 'oidc-transport-environment-denied');
+  }
   const expected = independentIntent(offered);
   const requestUrl = tokenRequestUrl(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
   const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;

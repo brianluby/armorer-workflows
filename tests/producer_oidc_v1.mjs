@@ -216,6 +216,27 @@ test('subject and environment substitutions never fall back or authorize protect
   }
 });
 
+/** Startup transport changes must reject before either credential access or issuer/service requests. */
+test('inherited transport overrides fail before credential reads or HTTP', async function transportEnvironment() {
+  const environment = process.env;
+  try {
+    for (const name of ['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'NODE_TLS_REJECT_UNAUTHORIZED', 'NODE_USE_ENV_PROXY']) {
+      for (const value of ['', 'synthetic-transport-override']) {
+        process.env = {
+          [name]: value,
+          ACTIONS_ID_TOKEN_REQUEST_URL: SERVICE,
+          /** Detect any access to the synthetic credential before the transport boundary rejects. */
+          get ACTIONS_ID_TOKEN_REQUEST_TOKEN() { throw new Error('request-token-must-not-be-read'); },
+        };
+        await denied(intent(), /^oidc-transport-environment-denied$/);
+        assert.equal(scenario.requests.length, 0);
+      }
+    }
+  } finally {
+    process.env = environment;
+  }
+});
+
 /** Unsafe triggers and malformed independent expectations are rejected before credentials or HTTP. */
 test('untrusted independent intent fails before any token request', async function intentBoundary() {
   const overrides = [
