@@ -31,6 +31,8 @@ jobs:
         uses: brianluby/armorer-workflows/.github/actions/test-mapped-producer-v1@9427f8ce06a4392bf906adb37dc9293511e55382
       - name: Native Node 24 artifact writer rejection fixtures without live credentials
         uses: brianluby/armorer-workflows/.github/actions/test-artifact-writer-v1@c4241879473917025bcdc03111a612303fea357f
+      - name: Native Node 24 combined archive and private writer join regressions
+        uses: brianluby/armorer-workflows/.github/actions/test-combined-handoff-v1@1659d9de38a5078bbf067b489f5c0424cb8e7972
       - name: Install exact fixture compiler
         run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
       - name: Install reviewed native audit tools

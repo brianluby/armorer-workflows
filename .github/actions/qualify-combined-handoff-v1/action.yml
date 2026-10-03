@@ -1,0 +1,5 @@
+name: Qualify combined producer handoffs v1
+description: Join real native build and policy archives to uploader jobs without signing or publication
+runs:
+  using: node24
+  main: index.mjs
