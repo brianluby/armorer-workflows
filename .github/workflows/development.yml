@@ -251,7 +251,7 @@ jobs:
           python = Path(os.environ["RUNNER_TEMP"]) / "armorer-schema-venv/bin/python"
           code = 'import sys; from pathlib import Path; sys.path.insert(0,str(Path.cwd())); sys.path.insert(0,str(Path.cwd()/"tests")); from policy_cases_v1 import main; main()'
           subprocess.run([str(python), "-I", "-c", code, "--armorer", os.environ["ARMORER_PATH"], "--output", os.environ["POLICY_RECEIPT"]], check=True)
-          code = 'import json, sys; from pathlib import Path; from jsonschema import Draft202012Validator; schema=json.loads(Path("schemas/policy-observation-v1.json").read_text()); v=Draft202012Validator(schema); [v.validate(json.loads(p.read_bytes())) for p in Path(sys.argv[1]).glob("*/policy-v1.json")]'
+          code = 'import json, sys; from pathlib import Path; from jsonschema import Draft202012Validator; schema=json.loads(Path("schemas/policy-observation-v1.json").read_text()); v=Draft202012Validator(schema); reports=sorted(Path(sys.argv[1]).glob("*/policy-v1.json")); assert reports, "no policy reports found"; [v.validate(json.loads(p.read_bytes())) for p in reports]'
           subprocess.run([str(Path(os.environ["RUNNER_TEMP"]) / "armorer-schema-venv/bin/python"), "-I", "-c", code, os.environ["POLICY_RECEIPT"]], check=True)
           PY
       - name: Retain native qualification evidence with explicit fixture identities

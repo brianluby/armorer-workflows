@@ -78,17 +78,16 @@ class ControllerGhApi(QualifiedGhApi):
             except (OSError, subprocess.SubprocessError) as error:
                 raise Failure("native transport read failed") from error
             finally:
-                if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except PermissionError as error:
+                    # macOS can deny signaling a group whose leader has just exited.
                     try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    except PermissionError as error:
-                        # macOS can deny signaling a group whose leader has just exited.
-                        try:
-                            process.wait(timeout=0.1)
-                        except subprocess.TimeoutExpired:
-                            raise Failure("native transport termination denied") from error
+                        process.wait(timeout=0.1)
+                    except subprocess.TimeoutExpired:
+                        raise Failure("native transport termination denied") from error
                 process.wait()
                 process.stdout.close()
                 process.stderr.close()

@@ -93,16 +93,15 @@ def _worker_read(self, endpoint, destination, limit):
             raise Failure("worker native read failed") from error
         finally:
             if process is not None:
-                if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except PermissionError as error:
                     try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    except PermissionError as error:
-                        try:
-                            process.wait(timeout=0.1)
-                        except subprocess.TimeoutExpired:
-                            raise Failure("worker native termination denied") from error
+                        process.wait(timeout=0.1)
+                    except subprocess.TimeoutExpired:
+                        raise Failure("worker native termination denied") from error
                 process.wait()
                 process.stdout.close()
                 process.stderr.close()

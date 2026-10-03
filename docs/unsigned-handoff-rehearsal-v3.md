@@ -2,14 +2,14 @@
 
 The repository's synthetic fixture covers library, CLI and service outputs on
 native Linux x86, Linux ARM and macOS ARM. `rehearsal-v3.yml` invokes the no-input
-`rust-build-v3.yml` at the full reviewed code commit
-`bd76fe10dfb54b022c1f755b300bd498fa79fe48`. Its uploaded result for each of the
+`rust-build-v3.yml` at the caller-pinned workflow commit
+`59a2e782150abff3f995682013d514e6865d8dfb`. Its uploaded result for each of the
 nine independently derived selections contains the exact five regular leaves
 described in [unsigned handoff v3](unsigned-handoff-v3.md).
 
 This is a second caller/configuration commit after the reusable code commit. The
-shared fixture `armorer.lock` and all three v1/v2/v3 callers use that same code
-commit. Updating only the v3 caller or only the shared lock would break the
+shared fixture `armorer.lock` and all three v1/v2/v3 callers pin that same
+caller/configuration commit. Updating only the v3 caller or only the shared lock would break the
 builder's mandatory executing-workflow identity check. The older entry-point
 and runtime/schema/tool-catalog bytes are unchanged; earlier immutable caller
 commits and validation receipts remain available. No moving pin or self-pinning
