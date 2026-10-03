@@ -352,7 +352,7 @@ jobs:
           main()
           PY
       - name: Qualify actual artifact uploader mappings from native provider records
-        uses: brianluby/armorer-workflows/.github/actions/qualify-artifact-writer-v1@2e6ce9cab6db8d87ab2852102015fe76eea4cd5f
+        uses: brianluby/armorer-workflows/.github/actions/qualify-artifact-writer-v1@338ce64caf39c3531798ba16b5355a63f3e5f74d
         env:
           ARMORER_WORKFLOW_READ_TOKEN: ${{ github.token }}
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
