@@ -54,7 +54,7 @@ runs:
         directory.mkdir(mode=0o700)
         prepare_node(directory / 'node')
     - name: Run the fixed read-only native qualification in a sterile child
-      uses: brianluby/armorer-workflows/.github/actions/native-combined-reader-v1@4cdf5d786aebb637c7b41afe53c4d19a8be08ffa
+      uses: brianluby/armorer-workflows/.github/actions/native-combined-reader-v1@6b717b05808ba7975924d540c3f03b324072baf5
       env:
         ARMORER_RUNTIME_ROOT: ${{ github.action_path }}/../../..
         ARMORER_NODE_DIRECTORY: ${{ runner.temp }}/armorer-combined-handoff-node

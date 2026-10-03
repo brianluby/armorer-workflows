@@ -138,6 +138,25 @@ def _cancellation_state():
         signal.signal(signal.SIGTERM, previous)
 
 
+def _signal_owned_group(identifier, offered_signal):
+    """Accept a refused post-exit signal only after the kernel confirms the owned group no longer exists."""
+    try:
+        os.killpg(identifier, offered_signal)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        deadline = time.monotonic() + 0.25
+        while True:
+            try:
+                os.killpg(identifier, 0)
+            except ProcessLookupError:
+                return
+            except PermissionError:
+                pass
+            require(time.monotonic() < deadline, 'producer owned process cleanup unavailable')
+            time.sleep(0.01)
+
+
 def _run_node(node, payload, environment, scratch, mode='producer'):
     """Run only the fixed worker with bounded pipes, closed input and cancellation-aware process cleanup."""
     with _cancellation_state() as cancelled:
@@ -190,19 +209,13 @@ def _run_node(node, payload, environment, scratch, mode='producer'):
             return b''.join(blocks)
         finally:
             # Let the fixed mapped worker reap its separately owned native children first.
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            _signal_owned_group(process.pid, signal.SIGTERM)
             try:
                 process.wait(timeout=90)
             except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
+                _signal_owned_group(process.pid, signal.SIGKILL)
                 process.wait()
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            _signal_owned_group(process.pid, signal.SIGKILL)
             if not process.stdin.closed:
                 process.stdin.close()
             process.stdout.close()
