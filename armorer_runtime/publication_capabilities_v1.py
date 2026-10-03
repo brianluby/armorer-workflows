@@ -174,8 +174,12 @@ def _repository(api, expected):
 
 def _unavailable(status):
     """Keep denied, invisible, throttled and provider-error states distinct without error body text."""
-    if status in (401, 403):
+    if status == 401:
         return {"state": "denied", "reason": "read-access-denied", "http_status": status}
+    if status == 403:
+        # Both permission denial and primary/secondary rate limits can use 403.
+        # Diagnostic text and arbitrary headers must not decide release authority.
+        return {"state": "unknown", "reason": "access-denied-or-throttled", "http_status": status}
     if status == 404:
         # Native 404 alone cannot distinguish disabled from permission-hidden or absent resources.
         return {"state": "unknown", "reason": "not-visible-or-not-enabled", "http_status": status}

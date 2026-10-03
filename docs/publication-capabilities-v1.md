@@ -23,7 +23,9 @@ setting or environment changes reject the observation.
 
 The immutable endpoint must return explicit boolean `enabled` and
 `enforced_by_owner` fields. Enabled is **configured**; explicit false is
-**disabled**. HTTP 401/403 is **denied**, 429 and other errors are **error**. A
+**disabled**. HTTP 401 is **denied**; 403 is **unknown**
+(`access-denied-or-throttled`), since permission denial and primary/secondary
+rate limits can share that status. HTTP 429 and other errors are **error**. A
 404 is **unknown** (`not-visible-or-not-enabled`), because the observer cannot
 independently distinguish disabled settings from a permission-hidden resource.
 Every one of these blocking states remains visible; none becomes successful
@@ -82,4 +84,5 @@ Primary API contracts:
 - [Immutable release configuration GET](https://docs.github.com/en/rest/repos/repos#check-if-immutable-releases-are-enabled-for-a-repository)
 - [Existing environment configuration GET](https://docs.github.com/en/rest/deployments/environments#get-an-environment)
 - [Run-level approval history](https://docs.github.com/en/rest/actions/workflow-runs#get-the-review-history-for-a-workflow-run)
+- [Rate-limit failures and ambiguous HTTP 403](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)
 - [Environment job protection rules](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idenvironment)

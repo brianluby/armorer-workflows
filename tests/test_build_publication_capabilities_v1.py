@@ -57,7 +57,7 @@ class CapabilityTests(unittest.TestCase):
     def test_native_error_statuses_never_become_disabled_or_success(self):
         """Hidden reads, denied permissions, throttling and server errors have explicit blocking states."""
         expected, initial = fixture()
-        for status, state in ((401, "denied"), (403, "denied"), (404, "unknown"),
+        for status, state in ((401, "denied"), (403, "unknown"), (404, "unknown"),
                               (422, "error"), (429, "error"), (500, "error"), (503, "error")):
             data = copy.deepcopy(initial)
             data["repos/owner/repo/immutable-releases"] = capability.NativeResponse(status, {"message": "secret-sentinel"})
@@ -65,6 +65,19 @@ class CapabilityTests(unittest.TestCase):
                 result = observe(expected, data)
                 self.assertEqual(result["prerequisites"]["immutable_releases"]["state"], state)
                 self.assertNotIn("secret-sentinel", json.dumps(result))
+                self.assertFalse(result["publication_authorized"])
+
+    def test_permission_and_rate_limit_403_remain_indistinguishable(self):
+        """Both provider meanings of HTTP 403 remain unknown without trusting or reflecting diagnostic text."""
+        expected, initial = fixture()
+        for message in ("API rate limit exceeded", "Resource not accessible by integration"):
+            data = copy.deepcopy(initial)
+            data["repos/owner/repo/immutable-releases"] = capability.NativeResponse(403, {"message": message})
+            with self.subTest(message=message):
+                result = observe(expected, data)
+                self.assertEqual(result["prerequisites"]["immutable_releases"],
+                    {"state": "unknown", "reason": "access-denied-or-throttled", "http_status": 403})
+                self.assertNotIn(message, json.dumps(result))
                 self.assertFalse(result["publication_authorized"])
 
     def test_explicit_disabled_setting_is_distinct(self):
