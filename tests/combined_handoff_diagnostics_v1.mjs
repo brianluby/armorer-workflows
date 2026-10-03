@@ -7,7 +7,12 @@ export const WORKER_PHASES = Object.freeze([
 export const WORKER_CODES = Object.freeze([
   "http-forbidden", "http-not-found", "http-rate-limited", "http-server-error", "http-other",
   "network-unclassified", "timeout", "invariant-rejected", "metadata-decode", "metadata-key",
-  "io-unclassified", "unclassified"
+  "io-unclassified", "unclassified", "invariant-run-identity", "invariant-run-state",
+  "invariant-workflow-pin", "invariant-pr-identity", "invariant-artifact-set",
+  "invariant-artifact-identity", "invariant-upload-window", "invariant-zip-layout",
+  "invariant-byte-identity", "invariant-staging-budget", "invariant-expectations",
+  "invariant-source-tree", "invariant-provider-race", "invariant-local-race",
+  "invariant-freshness", "invariant-policy-semantics", "invariant-build-semantics"
 ]);
 const prefix = 'ARMORER_COMBINED_FAILURE_V1';
 

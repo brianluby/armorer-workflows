@@ -65,6 +65,11 @@ and 96-byte line bound. Unknown, incomplete, oversized or ambiguous diagnostics
 fall back to fixed generic labels. URLs, response bodies/headers, arbitrary
 exception text and token values never reach output. HTTP categories distinguish
 403, 404, 429 and recognized server errors without printing their messages.
+Exact bounded constant messages from owned collector prerequisites also select
+fixed invariant labels for run state/identity, workflow pins, artifact sets,
+upload windows, ZIP layout, byte identity, freshness and mutable rereads. Unknown,
+dynamic, oversized or non-string messages remain generic. These labels never
+include offered metadata and provide no acceptance or release authority.
 The labels identify where to investigate; they do not change pins, freshness,
 run state, original private proofs, retry rules or required acceptance. All
 failed worker exits remain failures, and a contradictory successful exit with

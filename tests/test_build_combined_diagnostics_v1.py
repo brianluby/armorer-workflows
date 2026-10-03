@@ -1,5 +1,6 @@
 """Test coded native-qualification failures without exposing metadata or creating release authority."""
 import contextlib
+import ast
 import io
 import json
 import os
@@ -13,7 +14,7 @@ from unittest import mock
 import urllib.error
 
 from armorer_runtime.common import Failure
-from combined_handoff_diagnostics_v1 import CODES, PHASES, PREFIX, failure_line, fixed_error_code
+from combined_handoff_diagnostics_v1 import CODES, PHASES, PREFIX, INVARIANTS, failure_line, fixed_error_code
 import combined_handoff_cases_v1 as worker
 
 
@@ -94,6 +95,38 @@ class FixedDiagnosticTests(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), PREFIX + ' native-gh-install http-forbidden\n')
         self.assertEqual(signal.getsignal(signal.SIGTERM), original_signal)
         self.assertEqual(worker._apis, [])
+
+    def test_real_artifact_set_gate_has_a_specific_fixed_label(self):
+        """Identify an actual rejected collector prerequisite without outputting its metadata or granting authority."""
+        with self.assertRaises(Failure) as stopped:
+            worker.transport._listing({'total_count': 0, 'artifacts': []}, None, {'inert-name'}, 1, 2)
+        self.assertEqual(failure_line('archive-pair-reader', stopped.exception),
+                         PREFIX + ' archive-pair-reader invariant-artifact-set\n')
+
+    def test_only_exact_bounded_owned_failure_messages_select_codes(self):
+        """Known gates select fixed labels; oversized, dynamic or hostile message objects remain generic."""
+        class PoisonText(str):
+            """Make unintended hashing or equality of offered message subclasses observable."""
+            def __hash__(self):
+                """Reject dictionary lookup of an unqualified message object."""
+                raise AssertionError('offered message was hashed')
+        for message, code in INVARIANTS.items():
+            self.assertIn(code, CODES)
+            self.assertEqual(fixed_error_code(Failure(message)), code)
+        for message in ['credential-marker-not-for-output', 'x' * 65536,
+                        PoisonText('incomplete or extra provider artifact set'), object()]:
+            self.assertEqual(fixed_error_code(Failure(message)), 'invariant-rejected')
+        self.assertEqual(fixed_error_code(Failure('incomplete or extra provider artifact set', 'offered')),
+                         'invariant-rejected')
+
+    def test_invariant_labels_reference_real_owned_gate_messages(self):
+        """A diagnostic typo or stale gate mapping must fail rather than masquerade as usable hosted diagnosis."""
+        root = Path(__file__).resolve().parent.parent / 'armorer_runtime'
+        messages = set()
+        for name in ['combined_handoff_v1.py', 'transport_v1.py', 'build_v3.py', 'policy_v1.py', 'policy_transport_v1.py']:
+            messages.update(node.value for node in ast.walk(ast.parse((root / name).read_text()))
+                            if isinstance(node, ast.Constant) and type(node.value) is str)
+        self.assertEqual(set(INVARIANTS) - messages, set())
 
 
 if __name__ == '__main__':
