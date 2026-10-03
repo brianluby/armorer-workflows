@@ -49,6 +49,15 @@ fixed workflow shape. A live negative join substitutes a downloaded ZIP digest
 and must reject against the original private writer proof. Audit output retains
 actual source/runtime/job/archive identities without credentials.
 
+Measured ZIP sizes are positive safe integers; the writer proof preserves exact
+decimal strings from ProtoJSON. Their join compares canonical decimal values
+without lossy coercion and also rechecks the REST size. Twenty-one synthetic
+integration groups exercise the original private proof interface, including
+valid eighteen-archive joins, unsafe or substituted sizes, copied and expired
+proofs, and digest/source/set mismatches. A separate Node 24 fixture action drops
+unused injected runtime credentials before these tests. The native rehearsal
+uses the same join helper with live provider observations.
+
 The new workflow ID is discovered from authenticated run metadata **only in this
 qualification mode**. Production controllers need an independent expected ID.
 Rehearsal config/catalog inputs and the assembly runtime identity are explicitly

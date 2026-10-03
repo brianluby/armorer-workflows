@@ -5,7 +5,8 @@ import { mkdtemp, rm, readFile, appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { observeArtifactWriters, artifactWriterRecord } from '../armorer_runtime/artifact_writer_v1.mjs';
+import { observeArtifactWriters } from '../armorer_runtime/artifact_writer_v1.mjs';
+import { joinArchives } from './combined_handoff_join_v1.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const platforms = {
@@ -101,24 +102,6 @@ function writerIntent(collection) {
     reader_runner: process.env.EXPECTED_RUNNER_LABEL, artifacts };
 }
 
-/** Cross-check actual downloaded whole ZIP identities against the fresh original private writer observation. */
-function joinArchives(collection, proof) {
-  const writer = artifactWriterRecord(proof);
-  requireCondition(collection.state === 'combined-build-policy-transport-observed' && collection.qualification_only === true &&
-    collection.authentication_mode === 'isolated-workflow-token' && collection.archive_bytes_verified === true &&
-    collection.repository === writer.expected.repository && collection.repository_id === writer.expected.repository_id &&
-    collection.head_commit === writer.expected.head_sha && collection.run_id === writer.expected.run_id &&
-    collection.run_attempt === writer.expected.run_attempt &&
-    Object.keys(collection.artifacts).length === 18 && writer.snapshot.artifacts.length === 18);
-  for (const { artifact } of writer.snapshot.artifacts) {
-    const read = collection.artifacts[artifact.name];
-    requireCondition(read && String(read.provider.id) === artifact.id && read.archive.size === artifact.size &&
-      `sha256:${read.archive.sha256}` === artifact.digest && read.provider.name === artifact.name &&
-      read.provider.created_at === artifact.created_at);
-  }
-  return writer;
-}
-
 try {
   const collection = await collect();
   const proof = await observeArtifactWriters(writerIntent(collection));
@@ -134,7 +117,8 @@ try {
   collection.writer_archive_bindings_verified = true;
   collection.tampered_archive_join_rejected_with_real_writer_proof = true;
   collection.native_node_version = process.version;
-  for (const relative of ['tests/combined_handoff_cases_v1.mjs', 'armorer_runtime/artifact_writer_v1.mjs',
+  for (const relative of ['tests/combined_handoff_cases_v1.mjs', 'tests/combined_handoff_join_v1.mjs',
+    'armorer_runtime/artifact_writer_v1.mjs',
     '.github/actions/qualify-combined-handoff-v1/index.mjs', '.github/actions/qualify-combined-handoff-v1/action.yml']) {
     const bytes = await readFile(join(root, relative));
     collection.qualification_sources[relative] = { sha256: createHash('sha256').update(bytes).digest('hex'), size: bytes.length };
