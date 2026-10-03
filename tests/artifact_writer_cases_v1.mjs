@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, appendFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { observeArtifactWriters, artifactWriterRecord } from '../armorer_runtime/artifact_writer_v1.mjs';
+import { observeArtifactWriters, artifactWriterRecord } from '../armorer_runtime/artifact_writer_worker_v1.mjs';
 
 /** Reject unsupported qualification contexts before reading tokens or calling a provider. */
 function expected() {
@@ -29,7 +29,7 @@ try {
   record.qualification_only = true;
   record.native_node_version = process.version;
   record.qualification_sources = {};
-  for (const relative of ['../armorer_runtime/artifact_writer_v1.mjs', './artifact_writer_cases_v1.mjs',
+  for (const relative of ['../armorer_runtime/artifact_writer_worker_v1.mjs', './artifact_writer_cases_v1.mjs',
     '../.github/actions/qualify-artifact-writer-v1/index.mjs', '../.github/actions/qualify-artifact-writer-v1/action.yml']) {
     const bytes = await readFile(fileURLToPath(new URL(relative, import.meta.url)));
     record.qualification_sources[relative] = { sha256: createHash('sha256').update(bytes).digest('hex'), size: bytes.length };

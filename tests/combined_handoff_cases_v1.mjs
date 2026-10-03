@@ -5,7 +5,7 @@ import { mkdtemp, rm, readFile, appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { observeArtifactWriters } from '../armorer_runtime/artifact_writer_v1.mjs';
+import { observeArtifactWriters } from '../armorer_runtime/artifact_writer_worker_v1.mjs';
 import { joinArchives } from './combined_handoff_join_v1.mjs';
 import { fixedWorkerFailureDecoder } from './combined_handoff_diagnostics_v1.mjs';
 
@@ -50,6 +50,7 @@ async function collect() {
           }, 75000);
         }
       }
+      process.once('SIGTERM', fail);
       const environment = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', LANG: 'C.UTF-8', HOME: scratch, TMPDIR: scratch };
       for (const name of ['ARMORER_WORKFLOW_READ_TOKEN', 'GITHUB_REPOSITORY', 'GITHUB_REPOSITORY_ID', 'GITHUB_JOB',
         'GITHUB_EVENT_NAME', 'GITHUB_SHA', 'GITHUB_REF', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'EXPECTED_HEAD', 'EXPECTED_BRANCH']) {
@@ -72,6 +73,7 @@ async function collect() {
         blocks.push(Buffer.from(block));
       });
       child.on('close', status => {
+        process.removeListener('SIGTERM', fail);
         clearTimeout(timer);
         clearTimeout(grace);
         const diagnostic = diagnostics.snapshot();
@@ -135,7 +137,7 @@ try {
   failure = Object.freeze({ phase: 'qualification-source-read', code: 'io-unclassified' });
   for (const relative of ['tests/combined_handoff_cases_v1.mjs', 'tests/combined_handoff_join_v1.mjs',
     'tests/combined_handoff_diagnostics_v1.mjs',
-    'armorer_runtime/artifact_writer_v1.mjs',
+    'armorer_runtime/artifact_writer_worker_v1.mjs',
     '.github/actions/qualify-combined-handoff-v1/index.mjs', '.github/actions/qualify-combined-handoff-v1/action.yml']) {
     const bytes = await readFile(join(root, relative));
     collection.qualification_sources[relative] = { sha256: createHash('sha256').update(bytes).digest('hex'), size: bytes.length };

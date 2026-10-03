@@ -11,7 +11,20 @@ caller-controlled Node process is unsupported.
 
 The fixed composite action `.github/actions/producer-launcher-v1` invokes
 absolute isolated Python and overrides startup variables through trusted step
-configuration before the interpreter starts. A complete privileged job must
+configuration before the interpreter starts, including `LD_AUDIT`, native
+library/locale/crypto module paths and the supported macOS loader overrides.
+The two fixed artifact-writer/combined development actions use the same startup
+controls. They prepare public Node in a step with reader/OIDC credentials
+explicitly empty, then start only their fixed read-only reader through isolated
+Python and the exact child environment. They accept no command or script input.
+GitHub runner exposes artifact-service scope to JavaScript actions, while script
+steps may lack it. Each fixed reader composite therefore clears startup controls
+before the runner starts its internal Node24 token bridge; that bridge forwards
+only the exact required environment to isolated Python. No alternate credential
+or token-service fallback exists. Direct use of the internal bridge is unsupported.
+The bridge and outer reader action pins must be advanced together after source
+qualification; the credential-free preparation must run without OIDC permission.
+A complete privileged job must
 fix its startup environment before any earlier action/executable receives
 credentials. No credentialed release job is wired yet. Python remains a
 hosted-image dependency; this does not establish a sandbox against hostile
@@ -71,10 +84,24 @@ publication authority remain false. Live protected approval, accepted roots/
 catalog, an own signed producer/inventory positive, Apple parity and controlled
 publication/recovery remain separate gates. No SLSA level follows from fixtures.
 
+The parent is started by trusted fixed action configuration. Its Python `-I`
+flag and child allowlist cannot retroactively protect an interpreter that was
+already started with an injected native loader. Whole-job startup allowlisting
+must therefore be independently enforced before a production job receives
+credentials; a caller-controlled environment is unsupported. The composites
+fix the known loader controls at runner process creation, and native Linux
+qualification executes a real owned glibc audit module as an adversarial control.
+This does not claim that YAML can replace the runner's entire ambient environment.
+
 The native regression executes the actual entry/RSA worker with a fixed
 synthetic issuer and a real preload that tries to read a fake token and erase
-`NODE_OPTIONS`. The safe launch never executes it; a direct Node control does
+all four Node markers. The safe launch never executes it; a direct Node control does
 read the fake token. Additional cases cover wrong approval/substituted bytes
 before credential access, environment allowlisting, retired interfaces and an
-exited leader with surviving pipe holders. Authentication tests use no network
+exited leader with surviving pipe holders. A separate writer preload attempts
+to read fake REST and artifact-service credentials while the actual worker
+passes all 35 synthetic protocol groups. On native Linux, an owned `LD_AUDIT`
+module reads a fake token under unsafe Python startup and remains unexecuted
+with each actual composite step's startup controls. That glibc case is explicitly
+skipped on macOS and must be qualified on Linux. Authentication tests use no network
 or real credentials; public Node preparation is a separate qualification.

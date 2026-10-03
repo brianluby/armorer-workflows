@@ -1,6 +1,6 @@
 /** Synthetic integration regressions use the unchanged private writer observer, never fabricated handles. */
 import assert from 'node:assert/strict';
-import { observeArtifactWriters, artifactWriterRecord } from '../armorer_runtime/artifact_writer_v1.mjs';
+import { observeArtifactWriters, artifactWriterRecord } from '../armorer_runtime/artifact_writer_worker_v1.mjs';
 import { joinArchives } from './combined_handoff_join_v1.mjs';
 
 const realFetch = globalThis.fetch;

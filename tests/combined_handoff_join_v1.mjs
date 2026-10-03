@@ -1,5 +1,5 @@
 /** Join qualification archive measurements to an original private writer observation. */
-import { artifactWriterRecord } from '../armorer_runtime/artifact_writer_v1.mjs';
+import { artifactWriterRecord } from '../armorer_runtime/artifact_writer_worker_v1.mjs';
 
 /** Return only copied audit evidence after matching all eighteen measured qualification archives. */
 export function joinArchives(collection, proof) {

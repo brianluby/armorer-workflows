@@ -1,9 +1,19 @@
 # Artifact writer mapping v1
 
-The internal `artifact_writer_v1.mjs` reader joins GitHub's artifact service to
+The internal `artifact_writer_worker_v1.mjs` reader joins GitHub's artifact service to
 native Actions jobs. It reads existing records and never downloads or executes
 artifact payloads, requests OIDC, signs, creates artifacts or publishes releases.
 Its process-local observation handle is not release authority.
+
+The original public Node-first `artifact_writer_v1.mjs` exports now reject
+explicitly. JavaScript environment checks run after a preload could already
+read the REST/runtime credentials, replace fetch and erase its own markers.
+Supported development readers use fixed isolated Python composite entries,
+credential-free public Node preparation, an exact native executable copied to
+private scratch and a fixed child environment. Internal worker imports are
+unsupported in caller-controlled Node processes. See
+[the startup contract](producer-startup-v1.md), including the independent
+whole-job trust requirement and proposed Node catalog limitations.
 
 Independent controller intent supplies the repository, source commit, run and
 attempt, workflow, reader job and complete expected artifact/writer set. The
@@ -40,7 +50,7 @@ Responses are bounded to 4 MiB, each request to 30 seconds and the whole operati
 to 120 seconds. Two complete normalized snapshots must agree. Audit export is
 allowed only for the original handle for 30 seconds; copied JSON is inert.
 
-The development action qualifies the three already uploaded policy fixtures on
+The fixed development composite action qualifies the three already uploaded policy fixtures on
 Linux x86-64, Linux ARM64 and macOS. It receives only `contents: read`,
 `actions: read` and `checks: read`, runs after all fixture writers finish and is
 restricted to same-repository runs. No extra artifacts or release mutations are

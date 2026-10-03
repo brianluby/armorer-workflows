@@ -1,6 +1,6 @@
 /** Adversarial protocol fixtures; synthetic responses never establish live provider authentication. */
 import assert from 'node:assert/strict';
-import { observeArtifactWriters, artifactWriterRecord } from '../armorer_runtime/artifact_writer_v1.mjs';
+import { observeArtifactWriters, artifactWriterRecord } from '../armorer_runtime/artifact_writer_worker_v1.mjs';
 
 const realFetch = globalThis.fetch;
 const realNow = Date.now;

@@ -8,6 +8,7 @@ The proposed Node pins still require production catalog acceptance.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import io
 import json
@@ -108,75 +109,104 @@ def _credentials(operation, scratch):
     """Whitelist exact bounded platform credential names after validating independent inputs and Node bytes."""
     environment = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LANG': 'C.UTF-8',
         'HOME': str(scratch), 'TMPDIR': str(scratch)}
-    names = ('ACTIONS_ID_TOKEN_REQUEST_URL', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN')
+    require(operation in ('oidc', 'mapped', 'writer'), 'producer credential operation unsupported')
+    names = (('ARMORER_WORKFLOW_READ_TOKEN', 'ACTIONS_RUNTIME_TOKEN') if operation == 'writer' else
+        ('ACTIONS_ID_TOKEN_REQUEST_URL', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN'))
     if operation == 'mapped':
         names += ('ARMORER_WORKFLOW_READ_TOKEN',)
     for name in names:
         value = os.environ.get(name)
-        require(type(value) is str and 0 < len(value) <= 8192 and
+        require(type(value) is str and 0 < len(value) <= (16384 if name == 'ACTIONS_RUNTIME_TOKEN' else 8192) and
                 not any(ord(char) <= 32 or ord(char) == 127 for char in value), 'producer credential unavailable')
         environment[name] = value
     return environment
 
 
-def _run_node(node, payload, environment, scratch):
-    """Run only the fixed worker with bounded pipes, closed input and cancellation-aware process cleanup."""
-    process = subprocess.Popen([str(node), str(ROOT / 'producer_context_entry_v1.mjs')], cwd=scratch,
-        env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
-    deadline, counts, blocks = time.monotonic() + MAX_SECONDS, {'stdout': 0, 'stderr': 0}, []
+@contextmanager
+def _cancellation_state():
+    """Record parent cancellation before process creation and retain cleanup ownership until all children close."""
+    cancelled = [False]
+
+    def cancel(signum, frame):
+        """Mark cancellation without interrupting subprocess creation or the mandatory cleanup finally block."""
+        cancelled[0] = True
+
+    previous = signal.signal(signal.SIGTERM, cancel)
     try:
-        with selectors.DefaultSelector() as selector:
-            os.set_blocking(process.stdin.fileno(), False)
-            selector.register(process.stdin, selectors.EVENT_WRITE, 'stdin')
-            selector.register(process.stdout, selectors.EVENT_READ, 'stdout')
-            selector.register(process.stderr, selectors.EVENT_READ, 'stderr')
-            sent = 0
-            while selector.get_map():
-                require(time.monotonic() < deadline, 'producer launcher timed out')
-                for key, _ in selector.select(timeout=0.1):
-                    if key.data == 'stdin':
+        yield cancelled
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _run_node(node, payload, environment, scratch, mode='producer'):
+    """Run only the fixed worker with bounded pipes, closed input and cancellation-aware process cleanup."""
+    with _cancellation_state() as cancelled:
+        entries = {'producer': ROOT / 'producer_context_entry_v1.mjs',
+            'artifact-writer': ROOT.parent / '.github/actions/qualify-artifact-writer-v1/index.mjs',
+            'combined-handoff': ROOT.parent / '.github/actions/qualify-combined-handoff-v1/index.mjs'}
+        require(mode in entries, 'producer startup worker unsupported')
+        process = subprocess.Popen([str(node), str(entries[mode])], cwd=scratch,
+            env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        deadline = time.monotonic() + (MAX_SECONDS if mode == 'producer' else 1500)
+        counts, blocks = {'stdout': 0, 'stderr': 0}, []
+        try:
+            with selectors.DefaultSelector() as selector:
+                if payload:
+                    os.set_blocking(process.stdin.fileno(), False)
+                    selector.register(process.stdin, selectors.EVENT_WRITE, 'stdin')
+                else:
+                    process.stdin.close()
+                selector.register(process.stdout, selectors.EVENT_READ, 'stdout')
+                selector.register(process.stderr, selectors.EVENT_READ, 'stderr')
+                sent = 0
+                while selector.get_map():
+                    require(not cancelled[0], 'producer launcher cancelled')
+                    require(time.monotonic() < deadline, 'producer launcher timed out')
+                    for key, _ in selector.select(timeout=0.1):
+                        if key.data == 'stdin':
+                            try:
+                                sent += os.write(process.stdin.fileno(), payload[sent:sent + 65536])
+                            except BlockingIOError:
+                                continue
+                            if sent == len(payload):
+                                selector.unregister(process.stdin)
+                                process.stdin.close()
+                            continue
                         try:
-                            sent += os.write(process.stdin.fileno(), payload[sent:sent + 65536])
+                            block = os.read(key.fileobj.fileno(), 65536)
                         except BlockingIOError:
                             continue
-                        if sent == len(payload):
-                            selector.unregister(process.stdin)
-                            process.stdin.close()
-                        continue
-                    try:
-                        block = os.read(key.fileobj.fileno(), 65536)
-                    except BlockingIOError:
-                        continue
-                    if not block:
-                        selector.unregister(key.fileobj)
-                        continue
-                    counts[key.data] += len(block)
-                    require(counts[key.data] <= (MAX_OUTPUT if key.data == 'stdout' else 1024 * 1024),
-                            'producer launcher output bound')
-                    if key.data == 'stdout':
-                        blocks.append(block)
-        process.wait(timeout=max(0.001, deadline - time.monotonic()))
-        require(process.returncode == 0 and counts['stdout'] > 0, 'producer startup worker failed')
-        return b''.join(blocks)
-    finally:
-        # Let the fixed mapped worker reap its separately owned native children first.
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            process.wait(timeout=90)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        if not process.stdin.closed:
-            process.stdin.close()
-        process.stdout.close()
-        process.stderr.close()
+                        if not block:
+                            selector.unregister(key.fileobj)
+                            continue
+                        counts[key.data] += len(block)
+                        require(counts[key.data] <= (MAX_OUTPUT if key.data == 'stdout' else 1024 * 1024),
+                                'producer launcher output bound')
+                        if key.data == 'stdout':
+                            blocks.append(block)
+            process.wait(timeout=max(0.001, deadline - time.monotonic()))
+            require(not cancelled[0], 'producer launcher cancelled')
+            require(process.returncode == 0 and counts['stdout'] > 0, 'producer startup worker failed')
+            return b''.join(blocks)
+        finally:
+            # Let the fixed mapped worker reap its separately owned native children first.
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                process.wait(timeout=90)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            if not process.stdin.closed:
+                process.stdin.close()
+            process.stdout.close()
+            process.stderr.close()
 
 
 def launch_producer_context(node: Path, intent_bytes: bytes, approved_digest: str):
@@ -205,6 +235,43 @@ def launch_producer_context(node: Path, intent_bytes: bytes, approved_digest: st
             offered['signing_authorized'] is False and offered['publication_authorized'] is False,
             'producer worker observation invalid')
     return offered
+
+
+def launch_native_qualification(kind: str, node: Path):
+    """Run only fixed development reader shapes; no arbitrary entry, command, token or release input exists."""
+    require(sys.flags.isolated and sys.flags.ignore_environment and sys.flags.no_user_site,
+            'producer launcher requires isolated Python startup')
+    require(kind in ('artifact-writer', 'combined-handoff'), 'native qualification unsupported')
+    names = ('GITHUB_REPOSITORY', 'GITHUB_REPOSITORY_ID', 'GITHUB_JOB', 'GITHUB_EVENT_NAME',
+        'GITHUB_SHA', 'GITHUB_REF', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_WORKSPACE',
+        'GITHUB_STEP_SUMMARY', 'EXPECTED_HEAD', 'EXPECTED_BRANCH', 'EXPECTED_RUNNER_LABEL')
+    context = {}
+    for name in names:
+        value = os.environ.get(name)
+        require(type(value) is str and 0 < len(value) <= 4096 and
+                not any(ord(char) < 32 or ord(char) == 127 for char in value), 'native qualification context unavailable')
+        context[name] = value
+    require(context['GITHUB_REPOSITORY'] == 'brianluby/armorer-workflows' and
+        context['GITHUB_REPOSITORY_ID'] == '1398918288' and
+        context['GITHUB_JOB'] == ('transport-evidence' if kind == 'artifact-writer' else 'collect'),
+        'native qualification context unsupported')
+    require(os.environ.get('GITHUB_SERVER_URL') == 'https://github.com' and
+        os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('ACTIONS_RESULTS_URL') in
+        ('https://results-receiver.actions.githubusercontent.com', 'https://results-receiver.actions.githubusercontent.com/'),
+        'native qualification origin unsupported')
+    with tempfile.TemporaryDirectory(prefix='armorer-reader-startup-') as temporary:
+        scratch = Path(temporary)
+        scratch.chmod(0o700)
+        private_node = _private_node(node, scratch)
+        environment = {**_credentials('writer', scratch), **context,
+            'GITHUB_SERVER_URL': 'https://github.com', 'GITHUB_ACTIONS': 'true',
+            'ACTIONS_RESULTS_URL': 'https://results-receiver.actions.githubusercontent.com'}
+        output = _run_node(private_node, b'', environment, scratch, kind)
+    offered = parse_json(output)
+    require(type(offered) is dict and offered.get('signing_authorized') is False and
+            offered.get('publication_authorized') is False, 'native qualification authority invalid')
+    sys.stdout.buffer.write(output + b'\n')
+    sys.stdout.buffer.flush()
 
 
 def main():
