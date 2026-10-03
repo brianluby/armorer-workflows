@@ -1,0 +1,67 @@
+name: Node signature qualification v1
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node-signature-qualification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Public signature / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    steps:
+      - name: Checkout fixed candidate code and inert public fixtures
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify real public Node release signature without Node execution
+        env:
+          RECEIPT_PATH: ${{ runner.temp }}/armorer-node-signature.json
+        run: |
+          python3 -I - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
+          from armorer_runtime.node_release_signature_v1 import qualify
+          from armorer_runtime.common import Failure
+          if sys.platform == 'linux':
+              result = qualify()
+              assert result['native_signature_verified'] is True
+          else:
+              try:
+                  qualify()
+              except Failure as error:
+                  assert str(error) == 'node native OpenPGP qualification unsupported on this platform'
+              else:
+                  raise AssertionError('Unsupported native platform must not qualify')
+              result = {'kind': 'node-release-signature-qualification-v1', 'state': 'unsupported',
+                        'native_signature_verified': False, 'qualification_only': True,
+                        'production_root_approved': False, 'production_verifier_catalog_approved': False,
+                        'producer_signature_authentication_enabled': False, 'publication_authorized': False}
+          output = Path(os.environ['RECEIPT_PATH'])
+          with output.open('x') as stream:
+              json.dump(result, stream, indent=2)
+              stream.write('\n')
+          assert result['production_root_approved'] is False
+          assert result['production_verifier_catalog_approved'] is False
+          assert result['producer_signature_authentication_enabled'] is False
+          PY
+      - name: Retain qualification observations
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: node-signature-qualification-${{ matrix.os }}
+          path: ${{ runner.temp }}/armorer-node-signature.json
+          if-no-files-found: error
+          retention-days: 14
