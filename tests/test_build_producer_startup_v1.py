@@ -153,6 +153,7 @@ await import(''' + json.dumps((source / 'producer_context_entry_v1.mjs').as_uri(
         body = text.split('      run: |\n', 1)[1]
         self.assertNotIn('${{', body)
         self.assertNotIn('using: node', text)
+        self.assertNotIn('LD_TRACE_LOADED_OBJECTS:', text)
         self.assertIn('from armorer_runtime.producer_launcher_v1 import main', body)
 
     def test_unsupported_request_rejects_before_node_or_credentials(self):
@@ -229,6 +230,7 @@ await import(''' + json.dumps((source / 'producer_context_entry_v1.mjs').as_uri(
         for name, kind in (('qualify-artifact-writer-v1', 'artifact-writer'), ('qualify-combined-handoff-v1', 'combined-handoff')):
             text = (launcher.ROOT.parent / '.github/actions' / name / 'action.yml').read_text()
             self.assertNotIn('using: node', text)
+            self.assertNotIn('LD_TRACE_LOADED_OBJECTS:', text)
             self.assertEqual(text.count("        LD_AUDIT: ''"), 2)
             self.assertEqual(text.count("        GCONV_PATH: ''"), 2)
             self.assertIn("        ACTIONS_RUNTIME_TOKEN: ''", text.split('    - name: Run the fixed')[0])
@@ -263,6 +265,14 @@ await import(''' + json.dumps((source / 'producer_context_entry_v1.mjs').as_uri(
             self.assertEqual(marker.read_text(), 'synthetic-audit-no-authority')
             marker.unlink()
             executed = root / 'python-executed'
+            # glibc enables trace mode by presence, including the empty value.
+            # A successful exit must not stand in for actual interpreter execution.
+            traced = {**environment, 'LD_AUDIT': '', 'LD_TRACE_LOADED_OBJECTS': ''}
+            result = subprocess.run(['/usr/bin/python3', '-I', '-c',
+                'from pathlib import Path; Path(' + repr(str(executed)) + ').write_text("yes")'], env=traced,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+            self.assertEqual(result.returncode, 0)
+            self.assertFalse(executed.exists(), 'empty loader trace unexpectedly ran Python')
             for name in ('producer-launcher-v1', 'qualify-artifact-writer-v1', 'qualify-combined-handoff-v1'):
                 text = (launcher.ROOT.parent / '.github/actions' / name / 'action.yml').read_text()
                 for section in text.split('      env:\n')[1:]:

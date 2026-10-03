@@ -31,6 +31,15 @@ hosted-image dependency; this does not establish a sandbox against hostile
 same-user processes or a reproducible interpreter. Accepted controller source
 and independently enforced job boundaries remain required.
 
+`LD_TRACE_LOADED_OBJECTS` must be absent from that independently enforced
+job environment. An empty step override enables glibc tracing and exits before
+the interpreter runs, so these actions do not set this variable. The native
+Linux regression checks both this successful-exit/no-execution control and
+actual interpreter execution under the fixed action overrides. See the
+[glibc loader implementation](https://github.com/bminor/glibc/blob/glibc-2.39/elf/rtld.c#L2517-L2525).
+Require an independently checked output receipt; an action exit status alone
+does not establish authentication or release authority.
+
 The request is an independently approved bounded UTF-8 JSON file:
 
 ```json

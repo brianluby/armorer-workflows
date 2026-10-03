@@ -37,7 +37,6 @@ runs:
         LD_PROFILE_OUTPUT: ''
         LD_DEBUG: ''
         LD_DEBUG_OUTPUT: ''
-        LD_TRACE_LOADED_OBJECTS: ''
         DYLD_INSERT_LIBRARIES: ''
         DYLD_LIBRARY_PATH: ''
         DYLD_FRAMEWORK_PATH: ''
