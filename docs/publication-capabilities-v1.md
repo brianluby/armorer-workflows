@@ -67,12 +67,15 @@ configuration changes, clock rollback/expiry, independent environment policy,
 fixed routes, actual inert-child isolation, bounded output and child termination.
 Mocks in those fixtures do not authenticate GitHub or production capabilities.
 
-The hosted `transport-evidence` job additionally runs
+The separate hosted `capability-rehearsal-v1.yml` workflow runs
 `tests/capability_cases_v1.py` on all three supported native runners with the real
 workflow read token and pinned native gh. It retains observed blocking states,
 genuine bad-auth rejection and native-byte substitution rejection. This is a PR
 qualification under an unprivileged token, with every operational authority
 false; it does not qualify a production administrative-read credential.
+Its artifacts are isolated from the existing development run's exact three-policy
+artifact set. Adding capability receipts to that run would correctly make its
+native transport and artifact-writer collectors reject the extra assets.
 
 Primary API contracts:
 

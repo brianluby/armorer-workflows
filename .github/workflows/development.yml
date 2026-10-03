@@ -321,33 +321,6 @@ jobs:
           from controller_cases_v1 import main
           main()
           PYTHON
-      - name: Qualify native publication prerequisite statuses without administrative credentials
-        if: github.event_name == 'pull_request'
-        env:
-          ARMORER_READ_TOKEN: ${{ github.token }}
-          EXPECTED_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
-          GH_DEBUG: api
-          GITHUB_TOKEN: test-only-unrelated-token
-          HTTP_PROXY: http://test-only.invalid:9
-        run: |
-          python3 -I - <<'PY'
-          import sys
-          from pathlib import Path
-          sys.path.insert(0, str(Path.cwd()))
-          sys.path.insert(0, str(Path.cwd() / "tests"))
-          from capability_cases_v1 import main
-          main()
-          PY
-      - name: Retain genuine native prerequisite observations
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: capability-native-v1-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/armorer-capability-qualification-v1/receipt.json
-          archive: true
-          if-no-files-found: error
-          overwrite: false
-          retention-days: 14
       - name: Qualify fixed producer worker on the native Node 24 runtime
         if: github.event_name == 'pull_request'
         uses: brianluby/armorer-workflows/.github/actions/qualify-producer-worker-v1@9427f8ce06a4392bf906adb37dc9293511e55382
