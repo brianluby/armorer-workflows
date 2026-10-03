@@ -37,7 +37,18 @@ jobs:
       - name: Build fixed credential-free fixture validator
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/apple-intake-validator-target
-        run: cargo build --locked --manifest-path fixture-validator/Cargo.toml
+          RUNNER_SCRATCH: ${{ runner.temp }}
+        run: |
+          python3 -I - <<'PY'
+          import os, shutil, subprocess
+          from pathlib import Path
+          source = Path.cwd() / "fixture-validator"
+          destination = Path(os.environ["RUNNER_SCRATCH"]) / "apple-intake-validator-source"
+          assert source.is_dir() and not source.is_symlink() and not destination.exists()
+          # Keep the fixed validator outside this repository's Cargo workspace.
+          shutil.move(str(source), str(destination))
+          subprocess.run(["cargo", "build", "--locked", "--manifest-path", str(destination / "Cargo.toml")], check=True)
+          PY
       - name: Qualify complete native unsigned handoffs without executing payloads
         env:
           RUNNER_SCRATCH: ${{ runner.temp }}
