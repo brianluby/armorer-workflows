@@ -62,3 +62,9 @@ policy artifacts as one complete same-run set. Its native rehearsal joins actual
 downloaded archive bytes to their uploader jobs across all three profiles and
 platforms. Production signing, Apple finalization and release acceptance remain
 separate gates.
+
+The [Apple unsigned payload intake](docs/apple-payload-intake-v1.md) freezes the
+complete v3 handoff set and checks ARM64 Mach-O structure before a later signing
+stage can use its readonly bytes. Native Cargo qualification retains measured
+input identities; protected signing, notarization and final attestations remain
+required.

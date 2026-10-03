@@ -8,7 +8,7 @@ import tarfile
 import tempfile
 import tomllib
 
-from armorer_runtime import common, final_payload_v1 as final, tools
+from armorer_runtime import apple_payload_v1 as apple, common, final_payload_v1 as final, tools
 from build_cases_v3 import main as build_native_v3
 
 
@@ -63,11 +63,13 @@ def main():
         context = {"source": {"repository": "fixture/build", "commit": receipt["source_commit"]},
                    "runtime_commit": receipt["runtime_commit"], "run_id": "17", "run_attempt": "2"}
         catalog_bytes = json.dumps({"scope": "synthetic byte-layout qualification", "tools": tool_hashes}, sort_keys=True).encode()
-        items, handoffs, unsupported = [], {}, []
+        items, handoffs, unsupported, all_items, all_handoffs = [], {}, [], [], {}
         for case in selections:
             key = case["artifact_id"]
             root_name = "custom_zero" if case["id"] == "zero" else "fixture-app"
             item = final.PayloadExpectation(case, context, receipt["input_sha256"], root_name, "0.1.0", tool_hashes)
+            all_items.append(item)
+            all_handoffs[key] = raw / case["id"]
             if target == "aarch64-apple-darwin" and case["profile"] != "library":
                 plan = final.ReleaseExpectation(inputs, byte_identity(catalog_bytes), build, package, (item,), (runtime,))
                 try:
@@ -80,6 +82,23 @@ def main():
                 continue
             items.append(item)
             handoffs[key] = raw / case["id"]
+        with apple.prepare_apple_payloads(all_handoffs, tuple(all_items)) as intake:
+            apple_intake = intake.audit()
+            for key, payload in apple_intake["apple_payloads"].items():
+                payload_path = intake.unsigned_payload_path(key)
+                data = payload_path.read_bytes()
+                assert payload["inspection"]["bytes"] == byte_identity(data)
+                assert payload["inspection"]["signature_authenticated"] is False
+                assert payload["inspection"]["executable_was_run"] is False
+                retained = args.receipt_directory / "apple-unsigned" / key
+                retained.mkdir(parents=True)
+                for name, identity in apple_intake["handoff_leaf_identities"][key].items():
+                    leaf = (payload_path.parent / name).read_bytes()
+                    assert byte_identity(leaf) == identity
+                    (retained / name).write_bytes(leaf)
+            assert apple_intake["complete_selection_set"] == sorted(all_handoffs)
+            assert apple_intake["signing_authorized"] is False
+            assert apple_intake["publication_authorized"] is False
         plan = final.ReleaseExpectation(inputs, byte_identity(catalog_bytes), build, package, tuple(items), (runtime,))
         results = []
         with final.prepare_final_payloads(handoffs, plan) as assembly:
@@ -113,6 +132,11 @@ def main():
         report = {"native_target": target, "runtime_commit": receipt["runtime_commit"], "source_commit": receipt["source_commit"],
                   "assembler_source": byte_identity(Path(final.__file__).read_bytes()),
                   "qualification_source": byte_identity(Path(__file__).read_bytes()),
+                  "apple_intake_source": byte_identity(Path(apple.__file__).read_bytes()),
+                  "qualification_sources": {name: byte_identity((Path.cwd() / name).read_bytes()) for name in
+                      ("armorer_runtime/apple_payload_v1.py", "armorer_runtime/build_v3.py", "armorer_runtime/final_payload_v1.py",
+                       "tests/final_payload_cases_v1.py", "tests/build_cases_v3.py", "tests/build_cases_v2.py", "tests/build_cases.py")},
+                  "apple_unsigned_intake": apple_intake,
                   "native_handoff_receipt": receipt,
                   "scope": "actual native Cargo bytes with synthetic fixture-only source/run/catalog intent",
                   "cases": results, "unsupported": unsupported, "archive_bytes_independently_compared": True,
@@ -121,6 +145,7 @@ def main():
                   "signing_authorized": False, "publication_authorized": False, "full_release_factory_operational": False}
         (args.receipt_directory / "receipt.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps({"native_target": target, "final_payload_cases": [r["id"] for r in results],
+                          "inspected_apple_payloads": len(apple_intake["apple_payloads"]),
                           "blocked_apple_cases": [r["id"] for r in unsupported], "state": "native-bytes-qualified-not-attested"}))
 
 
