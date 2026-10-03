@@ -1,0 +1,5 @@
+name: Test combined handoff writer join
+description: Synthetic archive and original private writer proof regressions without live credentials
+runs:
+  using: node24
+  main: index.mjs

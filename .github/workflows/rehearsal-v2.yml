@@ -1,0 +1,18 @@
+name: Synthetic unsigned graph v2 rehearsal
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reusable:
+    uses: brianluby/armorer-workflows/.github/workflows/rust-build-v2.yml@59a2e782150abff3f995682013d514e6865d8dfb

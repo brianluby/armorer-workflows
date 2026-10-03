@@ -1,0 +1,1316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://armorer.dev/schemas/policy-observation-v1.json",
+  "title": "Unsigned independent policy observation v1",
+  "description": "Structural validation only; does not authenticate a producer, grant signing authority or establish SLSA compliance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "source",
+    "runtime_commit",
+    "run_id",
+    "run_attempt",
+    "event",
+    "ref",
+    "selection",
+    "scope",
+    "observed",
+    "effective_policy",
+    "runtime_inputs",
+    "tool_catalog",
+    "tools",
+    "reports",
+    "checks",
+    "signing_authorized",
+    "producer_job_authenticated",
+    "cryptographic_release_authenticated"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "state": {
+      "const": "passing-unsigned-policy-observation"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "runtime_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,19}$"
+    },
+    "run_attempt": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,19}$"
+    },
+    "event": {
+      "enum": [
+        "pull_request",
+        "push",
+        "workflow_dispatch"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^refs/(heads|tags|pull)/[A-Za-z0-9_./-]+$",
+      "maxLength": 512
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "profile",
+        "package",
+        "binary",
+        "targets",
+        "target",
+        "feature_set",
+        "default_features",
+        "features",
+        "runner",
+        "artifact_id",
+        "toolchain"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$"
+        },
+        "profile": {
+          "enum": [
+            "library",
+            "cli",
+            "service"
+          ]
+        },
+        "package": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$"
+        },
+        "binary": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "x86_64-unknown-linux-gnu",
+              "aarch64-unknown-linux-gnu",
+              "aarch64-apple-darwin"
+            ]
+          }
+        },
+        "target": {
+          "enum": [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+            "aarch64-apple-darwin"
+          ]
+        },
+        "feature_set": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$"
+        },
+        "default_features": {
+          "type": "boolean"
+        },
+        "features": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_+.-]{0,99}$"
+          }
+        },
+        "runner": {
+          "enum": [
+            "ubuntu-24.04",
+            "ubuntu-24.04-arm",
+            "macos-15"
+          ]
+        },
+        "artifact_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 239
+        },
+        "toolchain": {
+          "const": "1.95.0"
+        }
+      }
+    },
+    "scope": {
+      "const": "cargo-workspace-with-explicit-target-and-features"
+    },
+    "observed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "started_at",
+        "finished_at"
+      ],
+      "properties": {
+        "started_at": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "finished_at": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "effective_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "licenses",
+        "advisories",
+        "sources",
+        "bans"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "licenses": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allow"
+          ],
+          "properties": {
+            "allow": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 128,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "maxLength": 128
+              }
+            }
+          }
+        },
+        "advisories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exceptions"
+          ],
+          "properties": {
+            "exceptions": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "owner",
+                  "reason",
+                  "expires"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^RUSTSEC-[0-9]{4}-[0-9]{4}$"
+                  },
+                  "owner": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "expires": {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allow_git"
+          ],
+          "properties": {
+            "allow_git": {
+              "type": "array",
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "maxLength": 2048
+              }
+            }
+          }
+        },
+        "bans": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "multiple_versions",
+            "deny"
+          ],
+          "properties": {
+            "multiple_versions": {
+              "enum": [
+                "warn",
+                "deny"
+              ]
+            },
+            "deny": {
+              "type": "array",
+              "maxItems": 128,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "maxLength": 100
+              }
+            }
+          }
+        }
+      }
+    },
+    "runtime_inputs": {
+      "type": "object",
+      "maxProperties": 64,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sha256",
+          "size"
+        ],
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 134217728
+          }
+        }
+      }
+    },
+    "tool_catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "size"
+      ],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 134217728
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionlint",
+        "cargo-deny",
+        "gitleaks",
+        "zizmor"
+      ],
+      "properties": {
+        "actionlint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "target",
+            "url",
+            "format",
+            "distribution",
+            "member",
+            "executable",
+            "authentication_record"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "target": {
+              "enum": [
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+                "aarch64-apple-darwin"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "format": {
+              "const": "tar.gz"
+            },
+            "distribution": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 134217728
+                }
+              }
+            },
+            "member": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "executable": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 134217728
+                }
+              }
+            },
+            "authentication_record": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "asset_id",
+                "repository",
+                "tag",
+                "source_commit",
+                "release_id",
+                "release_record",
+                "source_record",
+                "upstream_signature_verified"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "github-release-provider-record-v1"
+                },
+                "asset_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "repository": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "tag": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "source_commit": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                "release_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "release_record": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sha256",
+                    "size"
+                  ],
+                  "properties": {
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 134217728
+                    }
+                  }
+                },
+                "source_record": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sha256",
+                    "size"
+                  ],
+                  "properties": {
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 134217728
+                    }
+                  }
+                },
+                "upstream_signature_verified": {
+                  "const": false
+                }
+              }
+            }
+          }
+        },
+        "cargo-deny": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "target",
+            "url",
+            "format",
+            "distribution",
+            "member",
+            "executable",
+            "authentication_record"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "target": {
+              "enum": [
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+                "aarch64-apple-darwin"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "format": {
+              "const": "tar.gz"
+            },
+            "distribution": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 134217728
+                }
+              }
+            },
+            "member": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "executable": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 134217728
+                }
+              }
+            },
+            "authentication_record": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "asset_id",
+                "repository",
+                "tag",
+                "source_commit",
+                "release_id",
+                "release_record",
+                "source_record",
+                "upstream_signature_verified"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "github-release-provider-record-v1"
+                },
+                "asset_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "repository": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "tag": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "source_commit": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                "release_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "release_record": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sha256",
+                    "size"
+                  ],
+                  "properties": {
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 134217728
+                    }
+                  }
+                },
+                "source_record": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sha256",
+                    "size"
+                  ],
+                  "properties": {
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 134217728
+                    }
+                  }
+                },
+                "upstream_signature_verified": {
+                  "const": false
+                }
+              }
+            }
+          }
+        },
+        "gitleaks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "target",
+            "url",
+            "format",
+            "distribution",
+            "member",
+            "executable",
+            "authentication_record"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "target": {
+              "enum": [
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+                "aarch64-apple-darwin"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "format": {
+              "const": "tar.gz"
+            },
+            "distribution": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 134217728
+                }
+              }
+            },
+            "member": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "executable": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 134217728
+                }
+              }
+            },
+            "authentication_record": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "asset_id",
+                "repository",
+                "tag",
+                "source_commit",
+                "release_id",
+                "release_record",
+                "source_record",
+                "upstream_signature_verified"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "github-release-provider-record-v1"
+                },
+                "asset_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "repository": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "tag": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "source_commit": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                "release_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "release_record": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sha256",
+                    "size"
+                  ],
+                  "properties": {
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 134217728
+                    }
+                  }
+                },
+                "source_record": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sha256",
+                    "size"
+                  ],
+                  "properties": {
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 134217728
+                    }
+                  }
+                },
+                "upstream_signature_verified": {
+                  "const": false
+                }
+              }
+            }
+          }
+        },
+        "zizmor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "target",
+            "url",
+            "format",
+            "distribution",
+            "member",
+            "executable",
+            "authentication_record"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "target": {
+              "enum": [
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+                "aarch64-apple-darwin"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "format": {
+              "const": "tar.gz"
+            },
+            "distribution": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 134217728
+                }
+              }
+            },
+            "member": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "executable": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 134217728
+                }
+              }
+            },
+            "authentication_record": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "asset_id",
+                "repository",
+                "tag",
+                "source_commit",
+                "release_id",
+                "release_record",
+                "source_record",
+                "upstream_signature_verified"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "github-release-provider-record-v1"
+                },
+                "asset_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "repository": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "tag": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "source_commit": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                "release_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "release_record": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sha256",
+                    "size"
+                  ],
+                  "properties": {
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 134217728
+                    }
+                  }
+                },
+                "source_record": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sha256",
+                    "size"
+                  ],
+                  "properties": {
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 134217728
+                    }
+                  }
+                },
+                "upstream_signature_verified": {
+                  "const": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "reports": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionlint.json",
+        "zizmor.json",
+        "gitleaks.json",
+        "cargo-deny.jsonl",
+        "source-inputs.json",
+        "advisory-db.json"
+      ],
+      "properties": {
+        "actionlint.json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "size"
+          ],
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 134217728
+            }
+          }
+        },
+        "zizmor.json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "size"
+          ],
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 134217728
+            }
+          }
+        },
+        "gitleaks.json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "size"
+          ],
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 134217728
+            }
+          }
+        },
+        "cargo-deny.jsonl": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "size"
+          ],
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 134217728
+            }
+          }
+        },
+        "source-inputs.json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "size"
+          ],
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 134217728
+            }
+          }
+        },
+        "advisory-db.json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "size"
+          ],
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 134217728
+            }
+          }
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionlint.json",
+        "zizmor.json",
+        "gitleaks.json",
+        "cargo-deny.jsonl"
+      ],
+      "properties": {
+        "actionlint.json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "findings"
+          ],
+          "properties": {
+            "findings": {
+              "const": 0
+            }
+          }
+        },
+        "zizmor.json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "findings"
+          ],
+          "properties": {
+            "findings": {
+              "const": 0
+            }
+          }
+        },
+        "gitleaks.json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "findings"
+          ],
+          "properties": {
+            "findings": {
+              "const": 0
+            }
+          }
+        },
+        "cargo-deny.jsonl": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "advisories",
+            "bans",
+            "licenses",
+            "sources"
+          ],
+          "properties": {
+            "advisories": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "errors",
+                "helps",
+                "notes",
+                "warnings"
+              ],
+              "properties": {
+                "errors": {
+                  "const": 0
+                },
+                "helps": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "notes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "warnings": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                }
+              }
+            },
+            "bans": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "errors",
+                "helps",
+                "notes",
+                "warnings"
+              ],
+              "properties": {
+                "errors": {
+                  "const": 0
+                },
+                "helps": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "notes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "warnings": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                }
+              }
+            },
+            "licenses": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "errors",
+                "helps",
+                "notes",
+                "warnings"
+              ],
+              "properties": {
+                "errors": {
+                  "const": 0
+                },
+                "helps": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "notes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "warnings": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                }
+              }
+            },
+            "sources": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "errors",
+                "helps",
+                "notes",
+                "warnings"
+              ],
+              "properties": {
+                "errors": {
+                  "const": 0
+                },
+                "helps": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "notes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "warnings": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "signing_authorized": {
+      "const": false
+    },
+    "producer_job_authenticated": {
+      "const": false
+    },
+    "cryptographic_release_authenticated": {
+      "const": false
+    }
+  }
+}

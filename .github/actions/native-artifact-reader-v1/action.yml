@@ -1,0 +1,5 @@
+name: Internal fixed artifact runtime-token bridge
+description: Internal Node24 bridge for the reviewed composite startup boundary; direct use is unsupported
+runs:
+  using: node24
+  main: index.mjs

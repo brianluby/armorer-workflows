@@ -31,6 +31,7 @@ LIBRARY_KINDS = {"lib", "rlib", "dylib", "cdylib", "staticlib", "proc-macro"}
 
 
 def _unique_object(pairs):
+    """Retain one JSON object while rejecting duplicate keys before semantic checks."""
     result = {}
     for key, value in pairs:
         if key in result:
@@ -50,10 +51,12 @@ def parse_json(data: bytes | str):
 
 
 def sha256(data: bytes) -> str:
+    """Return the lowercase SHA-256 digest of exact supplied bytes."""
     return hashlib.sha256(data).hexdigest()
 
 
 def _regular_bytes(path: Path, limit: int = 64 * 1024 * 1024) -> bytes:
+    """Read one bounded regular evidence leaf without accepting a symlink."""
     if not stat.S_ISREG(path.lstat().st_mode) or path.is_symlink():
         raise BuildError("expected a regular evidence file")
     with path.open("rb") as stream:
@@ -91,6 +94,7 @@ def _run(arguments: list[str], cwd: Path, environment: dict[str, str],
 
 
 def feature_arguments(selection: dict) -> list[str]:
+    """Derive only fixed Cargo feature flags from the validated selection."""
     arguments = [] if selection["default_features"] else ["--no-default-features"]
     if selection["features"]:
         arguments += ["--features", ",".join(selection["features"])]
@@ -315,6 +319,7 @@ def metadata_adapter(directory: Path, metadata: dict, expected_arguments: list[s
 
 
 def _file_record(path: Path, role: str) -> dict:
+    """Hash a bounded regular output leaf and retain its exact name, role and size."""
     if not stat.S_ISREG(path.lstat().st_mode) or path.is_symlink():
         raise BuildError("expected a regular inventory file")
     size = path.stat().st_size
@@ -327,19 +332,23 @@ def _file_record(path: Path, role: str) -> dict:
     return {"name": path.name, "role": role, "size": size, "sha256": hasher.hexdigest()}
 
 
-def verify_inventory(directory: Path, inventory: dict, expected_selection: dict | None = None,
-                     expected_context: dict | None = None) -> None:
+def _verify_inventory(directory: Path, inventory: dict, expected_selection: dict | None,
+                      expected_context: dict | None, *, expected_version: int) -> None:
     """Verify the exact unsigned file inventory; it is not signature verification."""
     required = {"schema_version", "state", "signing_status", "provenance_status", "source", "runtime_commit",
                 "run_id", "run_attempt", "selection", "input_sha256", "source_input_sha256", "tool_sha256",
                 "tool_pin_authority", "graph_scope", "coverage_gaps", "artifact_kind", "files"}
+    if expected_version == 2:
+        required.add("cargo_graph_version")
     if not isinstance(inventory, dict) or set(inventory) != required:
         raise BuildError("unexpected inventory fields")
     published_inventory = parse_json(_regular_bytes(directory / "inventory.json", 16 * 1024 * 1024))
     if not isinstance(published_inventory, dict) or json.dumps(published_inventory, sort_keys=True, separators=(",", ":")) != json.dumps(inventory, sort_keys=True, separators=(",", ":")):
         raise BuildError("published inventory manifest disagrees with expected inventory")
-    if type(inventory.get("schema_version")) is not int or inventory["schema_version"] != 1 or inventory.get("signing_status") != "unsigned":
+    if type(inventory.get("schema_version")) is not int or inventory["schema_version"] != expected_version or inventory.get("signing_status") != "unsigned":
         raise BuildError("unsupported build inventory")
+    if expected_version == 2 and (type(inventory["cargo_graph_version"]) is not int or inventory["cargo_graph_version"] != 2):
+        raise BuildError("version-two build requires graph version two")
     if inventory["state"] != "build-produced" or inventory["provenance_status"] != "not-attested":
         raise BuildError("unsupported build state or attestation claim")
     source = inventory["source"]
@@ -423,7 +432,25 @@ def verify_inventory(directory: Path, inventory: dict, expected_selection: dict 
         raise BuildError("missing or ambiguous artifact/SBOM pair")
 
 
+def verify_inventory(directory: Path, inventory: dict, expected_selection: dict | None = None,
+                     expected_context: dict | None = None) -> None:
+    """Check the unchanged explicit version-one inventory; never accept a successor by inference."""
+    _verify_inventory(directory, inventory, expected_selection, expected_context, expected_version=1)
+
+
+def verify_inventory_v2(directory: Path, inventory: dict, expected_selection: dict, expected_context: dict,
+                        expected_inputs: dict, expected_root_name: str, expected_package_version: str) -> None:
+    """Check explicit v2 inventory, all retained graph identities/edges and its exact paired SBOM."""
+    from .graph import validate_graph_v2
+    _verify_inventory(directory, inventory, expected_selection, {**expected_context, "input_sha256": expected_inputs}, expected_version=2)
+    key = expected_selection["artifact_id"]
+    graph = parse_json(_regular_bytes(directory / (key + ".cargo-graph.json")))
+    validate_graph_v2(graph, _regular_bytes(directory / (key + ".cdx.json")), expected_selection,
+                      expected_context, expected_inputs, expected_root_name, expected_package_version)
+
+
 def _tracked_inputs(root: Path, environment: dict) -> dict[str, str]:
+    """Hash every tracked regular source file, rejecting unsafe relative paths."""
     paths = _run(["/usr/bin/git", "ls-files", "-z"], root, environment).split(b"\0")
     result = {}
     for raw in paths:
@@ -442,7 +469,7 @@ def require_clean_source(root: Path, environment: dict) -> None:
         raise BuildError("untracked source inputs require a clean checkout")
 
 
-def build(root: Path, armorer: Path, artifact_id: str, output: Path) -> dict:
+def _build(root: Path, armorer: Path, artifact_id: str, output: Path, *, selected_graph_v2: bool) -> dict:
     """Build one rederived selection, validate its SBOM, and inventory bytes."""
     from armorer_runtime.common import load_project, select, member_manifest, cargo_environment, setup_toolchain
     from armorer_runtime.tools import install_tools, platform_target
@@ -473,6 +500,8 @@ def build(root: Path, armorer: Path, artifact_id: str, output: Path) -> dict:
             raise BuildError("unsupported trusted runtime commit identity")
         runtime_inputs = _tracked_inputs(runtime_root, environment)
         required_runtime = {"armorer_runtime/__init__.py", "armorer_runtime/build.py", "armorer_runtime/common.py", "armorer_runtime/tools.py", "pins/tools.json"}
+        if selected_graph_v2:
+            required_runtime.update({"armorer_runtime/graph.py", "armorer_runtime/build_v2.py"})
         if not required_runtime <= runtime_inputs.keys():
             raise BuildError("trusted runtime helpers must be committed inputs")
         _run(["/usr/bin/git", "diff-index", "--quiet", "HEAD", "--"], runtime_root, environment)
@@ -562,6 +591,9 @@ def build(root: Path, armorer: Path, artifact_id: str, output: Path) -> dict:
         native_file = output / (artifact_id + ".cargo-graph.json")
         graph_evidence = {"compiled_packages": evidence["features"], "native_linkage": evidence["native_linkage"],
                           "graph_scope": "compiled-cargo-target-and-host-build-dependencies"}
+        if selected_graph_v2:
+            from .graph import selected_graph_v2 as retained_graph
+            graph_evidence = retained_graph(metadata, evidence, selection, selected_target, expected_context, digests)
         native_file.write_text(json.dumps(graph_evidence, sort_keys=True, indent=2) + "\n")
         inventory = {"schema_version": 1, "state": "build-produced", "signing_status": "unsigned",
                      "provenance_status": "not-attested", **expected_context, "selection": selection,
@@ -575,12 +607,29 @@ def build(root: Path, armorer: Path, artifact_id: str, output: Path) -> dict:
                                       ["native and system libraries are not fully inventoried", "Cargo host/target graphs are aggregated by package ID"],
                      "artifact_kind": "source-package" if selection["profile"] == "library" else "executable",
                      "files": [_file_record(artifact, "artifact"), _file_record(sbom, "sbom"), _file_record(native_file, "cargo-graph")]}
+        if selected_graph_v2:
+            inventory["schema_version"] = 2
+            inventory["cargo_graph_version"] = 2
         (output / "inventory.json").write_text(json.dumps(inventory, sort_keys=True, indent=2) + "\n")
-        verify_inventory(output, inventory, selection, expected_context)
+        if selected_graph_v2:
+            verify_inventory_v2(output, inventory, selection, expected_context, digests, selected_target["name"], package["version"])
+        else:
+            verify_inventory(output, inventory, selection, expected_context)
         return inventory
 
 
+def build(root: Path, armorer: Path, artifact_id: str, output: Path) -> dict:
+    """Run the unchanged v1 unsigned builder with its feature-only graph contract."""
+    return _build(root, armorer, artifact_id, output, selected_graph_v2=False)
+
+
+def build_v2(root: Path, armorer: Path, artifact_id: str, output: Path) -> dict:
+    """Run the explicit successor builder retaining source/run-bound selected graph version two."""
+    return _build(root, armorer, artifact_id, output, selected_graph_v2=True)
+
+
 def main() -> None:
+    """Run the fixed v1 builder CLI and report static failure messages."""
     from armorer_runtime.common import Failure
     parser = argparse.ArgumentParser(description="Fixed unsigned Rust builder")
     parser.add_argument("--root", type=Path, required=True)

@@ -1,0 +1,5 @@
+name: Test artifact writer mapping v1
+description: Test uploader identity rejection fixtures on native Node 24 without live credentials
+runs:
+  using: node24
+  main: index.mjs

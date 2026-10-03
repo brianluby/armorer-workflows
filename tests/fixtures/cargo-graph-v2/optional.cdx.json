@@ -1,0 +1,45 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "app",
+      "version": "0.1.0",
+      "bom-ref": "app"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "host",
+      "name": "host-build",
+      "version": "0.2.0-alpha.1",
+      "scope": "excluded"
+    },
+    {
+      "type": "library",
+      "bom-ref": "dep",
+      "name": "optional-dep",
+      "version": "0.1.0"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "app",
+      "dependsOn": [
+        "host",
+        "dep"
+      ]
+    },
+    {
+      "ref": "host",
+      "dependsOn": []
+    },
+    {
+      "ref": "dep",
+      "dependsOn": []
+    }
+  ]
+}
