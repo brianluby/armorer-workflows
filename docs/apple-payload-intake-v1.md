@@ -6,6 +6,9 @@ uses the existing v3 graph, SBOM, source/run/attempt, input, package and tool
 checks over the copied bytes. It retains Linux payloads and opaque library
 archives as part of that same complete set. A missing, extra, conflicting,
 expired or changed required member rejects the whole intake.
+Every target declared by a deliverable/feature pair must have its matching
+selection. Siblings must agree on package, features and the complete declaration;
+tool hashes agree within a target and may differ between native targets.
 
 `prepare_apple_payloads` accepts controller-owned `PayloadExpectation` values
 and the live inert directories from the preceding collector. It offers no public
@@ -30,6 +33,8 @@ sharing the OS account remain prerequisites of the existing file readers.
 Apple CLI/service selections must contain a thin, little-endian ARM64
 `MH_EXECUTE` image with an unambiguous `LC_MAIN` inside file-backed executable
 `__TEXT`, after the load-command table, and the fixed `/usr/lib/dyld` loader.
+An unambiguous macOS `LC_BUILD_VERSION` or legacy `LC_VERSION_MIN_MACOSX`
+declaration is required; ARM64 iOS or Catalyst executables are rejected.
 The intake checks command counts, alignment and sizes, segment/section file and
 virtual ranges, duplicate segment/section names, overlapping file-backed
 segments and any embedded signature range. Scripts, ELF, fat/universal images,
@@ -58,6 +63,14 @@ snapshot interface without claiming an Apple native positive. The existing
 final assembler still rejects all unsigned Apple executables, so an intake
 success cannot be substituted for final Apple output.
 
+The separate intake workflow compiles a fixed consumer from scratch storage
+outside the candidate's Cargo workspace and cwd ancestry. It loads a byte-pinned
+control module from an exact predecessor checkout, rejects Cargo configuration
+in scratch ancestry, uses a fresh Cargo home and an explicit compiler, and drops
+inherited wrapper and flag variables. An absolute `--manifest-path` alone would
+still allow Cargo to discover configuration in the candidate working directory.
+See [Cargo's configuration search rules](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure).
+
 The audit always reports producer/writer authentication, accepted production
 catalog, protected environment, cryptographic release authentication, signing
 and publication authority as false. A copied audit or workspace object cannot
@@ -67,6 +80,9 @@ evidence, final-byte attestations and a complete signed consumer positive remain
 required for #9. No live Apple credential, signing/notarization submission,
 release, tag or repository-admin mutation is performed by this intake.
 
-Twenty adversarial unit tests use inert fixtures and do not establish live
+Twenty-four adversarial intake tests use inert fixtures and do not establish live
 signing or Sigstore qualification. Native Cargo qualification complements them;
 neither form substitutes for the separately approved protected rehearsal.
+Three workflow tests execute the actual build step: they compile a tiny fixed
+probe while candidate configuration and inherited wrappers are hostile, reject
+scratch-ancestor overrides, and reject altered pinned controls before import.

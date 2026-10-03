@@ -78,7 +78,7 @@ def inspect_macho(path):
                 32 + length <= identity["size"], "Apple Mach-O command table bounds invalid")
         commands = incoming.read(length)
     require(len(commands) == length, "Apple Mach-O command table truncated")
-    offset, segments, entry, dynamic_linker, signature = 0, {}, None, False, None
+    offset, segments, entry, dynamic_linker, signature, platform = 0, {}, None, False, None, None
     for _ in range(count):
         require(offset + 8 <= length, "Apple Mach-O load command truncated")
         kind, extent = struct.unpack_from("<II", commands, offset)
@@ -104,12 +104,23 @@ def inspect_macho(path):
             require(32 + length <= position and 0 < size <= MAX_COMMAND_BYTES and
                     position + size <= identity["size"], "Apple Mach-O signature range invalid")
             signature = {"offset": position, "size": size}
+        elif kind == 0x32:
+            require(extent >= 24 and platform is None, "Apple Mach-O platform ambiguous")
+            system, minimum, sdk, tools = struct.unpack_from("<4I", command, 8)
+            require(system == 1 and minimum > 0 and tools <= 128 and extent == 24 + 8 * tools,
+                    "Apple Mach-O macOS build version invalid")
+            platform = {"name": "macos", "minimum_version": minimum, "sdk_version": sdk}
+        elif kind == 0x24:
+            require(extent == 16 and platform is None, "Apple Mach-O platform ambiguous")
+            minimum, sdk = struct.unpack_from("<II", command, 8)
+            require(minimum > 0, "Apple Mach-O macOS minimum version invalid")
+            platform = {"name": "macos", "minimum_version": minimum, "sdk_version": sdk}
         else:
-            require(kind not in (0x5, 0x21, 0x2C), "Apple Mach-O legacy or encrypted payload unsupported")
+            require(kind not in (0x5, 0x21, 0x2C, 0x25, 0x2F, 0x30), "Apple Mach-O legacy, encrypted or foreign platform unsupported")
         offset += extent
     require(offset == length, "Apple Mach-O command count mismatch")
     text = segments.get("__TEXT")
-    require(dynamic_linker and text is not None and text["offset"] == 0 and text["executable"] and
+    require(platform is not None and dynamic_linker and text is not None and text["offset"] == 0 and text["executable"] and
             entry is not None and 32 + length <= entry < text["size"], "Apple Mach-O entry point invalid")
     ranges = sorted((segment["offset"], segment["offset"] + segment["size"])
                     for segment in segments.values() if segment["size"])
@@ -122,7 +133,7 @@ def inspect_macho(path):
                 "Apple Mach-O signature outside linkedit")
     require(_identity(path, MAX_ARTIFACT) == identity, "Apple Mach-O bytes changed during inspection")
     return {"format": "thin-arm64-macho-executable", "bytes": identity, "load_commands": count,
-            "entry_offset": entry, "embedded_signature_range": signature,
+            "entry_offset": entry, "embedded_signature_range": signature, "platform": platform,
             "signature_authenticated": False, "executable_was_run": False}
 
 
@@ -132,7 +143,7 @@ def _expectations(items):
             all(type(item) is PayloadExpectation for item in items), "Apple intake expectation set unsupported")
     raw = _json([asdict(item) for item in items])
     require(len(raw) <= 1024 * 1024, "Apple intake expectations exceed bound")
-    copied, keys = [], set()
+    copied, keys, groups, tools_by_target = [], set(), {}, {}
     for record in parse_json(raw):
         item = PayloadExpectation(**record)
         case = item.selection
@@ -164,11 +175,23 @@ def _expectations(items):
         _fields(item.input_sha256, {"armorer.toml", "armorer.lock", "Cargo.lock"})
         require(all(type(digest) is str and re.fullmatch(r"[0-9a-f]{64}", digest) for digest in item.input_sha256.values()),
                 "Apple intake input identity invalid")
+        _fields(item.tool_sha256, {"cargo-cyclonedx", "cyclonedx"})
+        require(all(type(digest) is str and re.fullmatch(r"[0-9a-f]{64}", digest) for digest in item.tool_sha256.values()),
+                "Apple intake tool identity invalid")
         if copied:
-            require(item.context == copied[0].context and item.input_sha256 == copied[0].input_sha256 and
-                    item.tool_sha256 == copied[0].tool_sha256, "Apple intake complete contexts differ")
+            require(item.context == copied[0].context and item.input_sha256 == copied[0].input_sha256,
+                    "Apple intake complete contexts differ")
+        same_target = tools_by_target.setdefault(case["target"], item.tool_sha256)
+        require(same_target == item.tool_sha256, "Apple intake same-target tools differ")
+        group = (case["id"], case["feature_set"])
+        declaration = {name: value for name, value in case.items() if name not in ("target", "runner", "artifact_id")}
+        declaration.update(root_component_name=item.root_component_name, package_version=item.package_version)
+        require(groups.setdefault(group, declaration) == declaration, "Apple intake sibling declarations differ")
         keys.add(key)
         copied.append(item)
+    required = {f'{item.selection["id"]}--{target}--{item.selection["feature_set"]}'
+                for item in copied for target in item.selection["targets"]}
+    require(keys == required, "Apple intake declared target sibling missing")
     return tuple(copied)
 
 

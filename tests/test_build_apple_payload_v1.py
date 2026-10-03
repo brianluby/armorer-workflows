@@ -23,11 +23,13 @@ def segment(name=b"__TEXT", offset=0, size=1024, protection=5, sections=b""):
         0x100000000 + offset, max(size, 4096), offset, size, 7, protection, len(sections) // 80, 0) + sections
 
 
-def macho(extra=(), *, header_changes=None, text=None, entry=512, linker=b"/usr/lib/dyld\0"):
+def macho(extra=(), *, header_changes=None, text=None, entry=512, linker=b"/usr/lib/dyld\0", platform=1):
     """Create an inert thin ARM64 executable layout, never a runnable or signed positive control."""
     padded = linker + b"\0" * (-(12 + len(linker)) % 8)
     commands = [text if text is not None else segment(), struct.pack("<III", 0xE, 12 + len(padded), 12) + padded,
                 struct.pack("<IIQQ", 0x80000028, 24, entry, 0), *extra]
+    if platform is not None:
+        commands.append(struct.pack("<6I", 0x32, 24, platform, 0xB0000, 0xF0000, 0))
     joined = b"".join(commands)
     fields = [0xFEEDFACF, 0x0100000C, 0, 2, len(commands), len(joined), 0x200004, 0]
     for index, value in (header_changes or {}).items():
@@ -49,6 +51,18 @@ def fixture(root, *, profile="cli", target=apple.APPLE, name="app", payload=None
         handoff["build_inventory"] = _metadata_identity(directory)
         (directory / HANDOFF_NAME).write_bytes(encoded(handoff))
     return directory, item
+
+
+def rebind(directory, item):
+    """Bind synthetic sibling declarations and independently supplied tools to all affected v3 records."""
+    inventory_path = directory / "inventory.json"
+    inventory = json.loads(inventory_path.read_bytes())
+    inventory.update(selection=item.selection, tool_sha256=item.tool_sha256)
+    inventory_path.write_bytes(encoded(inventory))
+    handoff_path = directory / HANDOFF_NAME
+    handoff = json.loads(handoff_path.read_bytes())
+    handoff.update(selection=item.selection, tool_sha256=item.tool_sha256, build_inventory=_metadata_identity(directory))
+    handoff_path.write_bytes(encoded(handoff))
 
 
 class ApplePayloadTests(unittest.TestCase):
@@ -122,6 +136,56 @@ class ApplePayloadTests(unittest.TestCase):
                         self.fail("cross-context set yielded")
                     staging.assert_not_called()
 
+    def test_every_declared_target_requires_a_matching_sibling_before_staging(self):
+        """Reject an omitted Linux sibling even when the offered and expected key sets both omit it."""
+        with tempfile.TemporaryDirectory() as temporary:
+            directory, item = fixture(Path(temporary))
+            item.selection["targets"] = [apple.APPLE, "x86_64-unknown-linux-gnu"]
+            with mock.patch.object(apple.tempfile, "TemporaryDirectory") as staging:
+                with self.assertRaisesRegex(Failure, "target sibling missing"), apple.prepare_apple_payloads(
+                    {item.selection["artifact_id"]: directory}, (item,)):
+                    self.fail("missing declared target yielded")
+                staging.assert_not_called()
+
+    def test_sibling_declarations_cannot_disagree_on_features_or_package_identity(self):
+        """Reject same-deliverable target siblings with conflicting declarations or package expectations."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first_path, first = fixture(root)
+            second_path, second = fixture(root, target="x86_64-unknown-linux-gnu")
+            for item in (first, second):
+                item.selection["targets"] = [apple.APPLE, "x86_64-unknown-linux-gnu"]
+            for field in ("targets", "features", "default_features", "package_version", "root_component_name"):
+                altered = copy.deepcopy(second)
+                if field == "targets":
+                    altered.selection[field] = ["x86_64-unknown-linux-gnu"]
+                elif field == "features":
+                    altered.selection[field] = ["other"]
+                elif field == "default_features":
+                    altered.selection[field] = not altered.selection[field]
+                else:
+                    from dataclasses import replace
+                    altered = replace(altered, **{field: "9.9.9" if field == "package_version" else "other"})
+                directories = {first.selection["artifact_id"]: first_path, altered.selection["artifact_id"]: second_path}
+                with self.subTest(field=field), mock.patch.object(apple.tempfile, "TemporaryDirectory") as staging:
+                    with self.assertRaisesRegex(Failure, "sibling declarations differ"), apple.prepare_apple_payloads(directories, (first, altered)):
+                        self.fail("conflicting siblings yielded")
+                    staging.assert_not_called()
+
+    def test_complete_target_siblings_allow_independent_native_tool_hashes(self):
+        """Retain genuine per-target tool identities without requiring Linux and macOS binaries to hash alike."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cases = [fixture(root), fixture(root, target="x86_64-unknown-linux-gnu")]
+            for index, (directory, item) in enumerate(cases):
+                item.selection["targets"] = [apple.APPLE, "x86_64-unknown-linux-gnu"]
+                item.tool_sha256.update({"cargo-cyclonedx": str(index + 7) * 64, "cyclonedx": str(index + 1) * 64})
+                rebind(directory, item)
+            with apple.prepare_apple_payloads({item.selection["artifact_id"]: directory for directory, item in cases},
+                tuple(item for _, item in cases)) as intake:
+                self.assertEqual(len(intake.audit()["complete_selection_set"]), 2)
+                self.assertEqual(len(intake.audit()["apple_payloads"]), 1)
+
     def test_offered_run_and_payload_digest_substitutions_fail_closed(self):
         """Detect substitutions in exact v3 metadata and artifact bytes before returning an intake object."""
         for kind in ("run", "payload"):
@@ -150,8 +214,24 @@ class ApplePayloadTests(unittest.TestCase):
     def test_header_and_command_count_bounds_are_independent(self):
         """Reject truncated and overlarge command tables and dishonest command counts."""
         for data in [macho()[:31], macho()[:200], macho(header_changes={4: 0}), macho(header_changes={4: 4097}),
-                     macho(header_changes={5: apple.MAX_COMMAND_BYTES + 1}), macho(header_changes={4: 4})]:
+                     macho(header_changes={5: apple.MAX_COMMAND_BYTES + 1}), macho(header_changes={4: 5})]:
             with self.subTest(size=len(data)), self.assertRaises(Failure):
+                self.inspect(data)
+
+    def test_macos_platform_is_required_unambiguous_and_structurally_bounded(self):
+        """Reject iOS/Catalyst, absent or conflicting platform declarations and malformed build-version tools."""
+        legacy = struct.pack("<4I", 0x24, 16, 0xB0000, 0xF0000)
+        self.assertEqual(self.inspect(macho())["platform"]["name"], "macos")
+        self.assertEqual(self.inspect(macho([legacy], platform=None))["platform"]["name"], "macos")
+        commands = [struct.pack("<6I", 0x32, 24, 1, 0xB0000, 0xF0000, 1),
+                    struct.pack("<6I", 0x32, 24, 1, 0, 0xF0000, 0),
+                    struct.pack("<II", 0x32, 8), struct.pack("<4I", 0x25, 16, 0xB0000, 0xF0000),
+                    struct.pack("<4I", 0x2F, 16, 0xB0000, 0xF0000), struct.pack("<4I", 0x30, 16, 0xB0000, 0xF0000)]
+        cases = [macho(platform=None), macho(platform=2), macho(platform=6), macho(platform=99),
+                 macho([legacy]), macho([legacy, legacy], platform=None),
+                 *[macho([command], platform=None) for command in commands]]
+        for data in cases:
+            with self.subTest(digest=hashlib.sha256(data).hexdigest()), self.assertRaises(Failure):
                 self.inspect(data)
 
     def test_misaligned_short_overrunning_and_unsupported_commands_fail(self):
