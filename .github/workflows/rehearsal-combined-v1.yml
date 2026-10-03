@@ -47,7 +47,7 @@ jobs:
           path: producer-runtime
           persist-credentials: false
       - name: Qualify actual complete build-policy archives and uploader bindings
-        uses: brianluby/armorer-workflows/.github/actions/qualify-combined-handoff-v1@1659d9de38a5078bbf067b489f5c0424cb8e7972
+        uses: brianluby/armorer-workflows/.github/actions/qualify-combined-handoff-v1@2e6ce9cab6db8d87ab2852102015fe76eea4cd5f
         env:
           ARMORER_WORKFLOW_READ_TOKEN: ${{ github.token }}
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
