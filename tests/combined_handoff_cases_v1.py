@@ -16,6 +16,7 @@ from armorer_runtime import ci, common, combined_handoff_v1 as combined, final_p
 from armorer_runtime import policy_tools_v1 as pins, policy_v1 as policy, tools, transport_v1 as transport
 from armorer_runtime.transport_tools_v1 import install_gh
 from armorer_runtime.policy_transport_v1 import ExpectedPolicyRun
+from combined_handoff_diagnostics_v1 import PHASES, failure_line
 
 RUNTIME = '59a2e782150abff3f995682013d514e6865d8dfb'
 REPOSITORY = 'brianluby/armorer-workflows'
@@ -23,6 +24,14 @@ REPOSITORY_ID = 1398918288
 CALLER = '.github/workflows/rehearsal-combined-v1.yml'
 _cancelled = False
 _apis = []
+_phase = "arguments"
+
+
+def phase(value):
+    """Track only an internal fixed qualification stage; it can identify failure but grants no authority."""
+    global _phase
+    common.require(value in PHASES, 'unsupported fixed qualification phase')
+    _phase = value
 
 
 def cancel(_number, _frame):
@@ -72,10 +81,12 @@ def qualify(source, runtime, api, distribution):
                    'combined qualification context invalid')
     environment = {'PATH':'/usr/bin:/bin','LANG':'C.UTF-8','HOME':str(source.parent),
                    'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':os.devnull,'GIT_TERMINAL_PROMPT':'0'}
+    phase('source-context')
     source_commit = os.environ['GITHUB_SHA']
     policy.source_context(source, {'commit':source_commit}, environment)
     common.require(policy.git(runtime,['rev-parse','HEAD'],environment).decode().strip() == RUNTIME,
                    'combined qualification runtime pin differs')
+    phase('runtime-bytes')
     helpers = {}
     for name in (*policy.RUNTIME_INPUTS, 'pins/tools.json'):
         data = common.read_input(runtime,name)
@@ -83,6 +94,7 @@ def qualify(source, runtime, api, distribution):
                        'combined qualification runtime bytes modified')
         if name in policy.RUNTIME_INPUTS:
             helpers[name] = identity(data)
+    phase('selection-inputs')
     config = tomllib.loads(common.read_input(source,'armorer.toml').decode())
     selections = common.selections(config)
     common.require(len(selections) == 9 and {case['id'] for case in selections} ==
@@ -95,6 +107,7 @@ def qualify(source, runtime, api, distribution):
     run_id, attempt = int(os.environ['GITHUB_RUN_ID']), int(os.environ['GITHUB_RUN_ATTEMPT'])
     # The new workflow ID is discovered only for this explicitly nonproduction
     # qualification. Production controllers must independently supply its ID.
+    phase('provider-run')
     provider = api.json(f'repos/{REPOSITORY}/actions/runs/{run_id}')
     common.require(provider.get('path') == CALLER and provider.get('name') == 'Unsigned combined producer handoff rehearsal' and
                    type(provider.get('workflow_id')) is int and provider['workflow_id'] > 0,
@@ -106,11 +119,13 @@ def qualify(source, runtime, api, distribution):
     policy_run = ExpectedPolicyRun(REPOSITORY,REPOSITORY_ID,head,source_commit,branch,event,ref,CALLER,
                                   provider['workflow_id'],run_id,attempt,RUNTIME)
     context = {key:value for key,value in policy_run.context().items() if key not in ('event','ref')}
+    phase('reviewed-tool-members')
     measured_tools = tool_hashes(runtime)
     items = tuple(final.PayloadExpectation(case,context,hashes,
                                           case['package'].replace('-','_') if case['profile']=='library' else case['binary'],'0.1.0',
                                           measured_tools[case['target']]) for case in selections)
     catalog, catalog_id = pins.load_catalog()
+    phase('archive-pair-reader')
     with combined.collect_producer_handoffs(api,combined.CombinedRun(build,policy_run,True),items,inputs,helpers,
                                            {'catalog':catalog,'identity':catalog_id},ci.load_policy(source)) as (builds,policies,receipt):
         build_workflow = {'repository':REPOSITORY,'path':build.builder_path,'commit':RUNTIME}
@@ -123,6 +138,7 @@ def qualify(source, runtime, api, distribution):
         def expectation(selected):
             """Construct fixture-only assembly expectations; no accepted production runtime is claimed."""
             return final.ReleaseExpectation(final_inputs,catalog_id,build_workflow,package_workflow,selected,(runtime_bytes,))
+        phase('final-byte-layout')
         finals = {}
         apple_block_checked = False
         if event == "pull_request":
@@ -155,9 +171,11 @@ def qualify(source, runtime, api, distribution):
                        live_oidc_requested=False, artifact_executed=False,
                        qualification_sources={name:identity((Path(__file__).resolve().parent.parent/name).read_bytes())
                            for name in ('armorer_runtime/combined_handoff_v1.py','tests/combined_handoff_cases_v1.py',
+                                        'tests/combined_handoff_diagnostics_v1.py',
                                         'armorer_runtime/final_payload_v1.py','armorer_runtime/policy_v1.py',
                                         'armorer_runtime/transport_v1.py')})
         checkpoint()
+    phase('source-recheck')
     common.require(policy.snapshot(source) == inputs, 'combined qualification source changed during reads')
     policy.source_context(source,{'commit':source_commit},environment)
     return receipt
@@ -167,21 +185,25 @@ def main():
     """Consume only an ephemeral read token and emit a bounded credential-free qualification receipt."""
     previous = signal.signal(signal.SIGTERM,cancel)
     try:
+        phase('arguments')
         common.require(len(sys.argv) == 3, 'combined qualification arguments invalid')
         source, runtime = (Path(value).resolve(strict=True) for value in sys.argv[1:])
         token = os.environ.pop('ARMORER_WORKFLOW_READ_TOKEN',None)
         with tempfile.TemporaryDirectory(prefix='armorer-combined-native-') as temporary:
+            phase('native-gh-install')
             executable,distribution = install_gh(Path(temporary)/'native')
+            phase('native-gh-api')
             api = transport.QualifiedGhApi(executable,token)
             _apis.append(api)
             del token
             result = qualify(source,runtime,api,distribution)
+            phase('emit-record')
             encoded = policy.canonical(result)
             common.require(0 < len(encoded) <= 4*1024*1024, 'combined qualification output exceeds bound')
             checkpoint()
             sys.stdout.buffer.write(encoded)
-    except Exception:
-        sys.stderr.write('combined-native-qualification-failed\n')
+    except Exception as error:
+        sys.stderr.write(failure_line(_phase, error))
         raise SystemExit(1) from None
     finally:
         _apis.clear()

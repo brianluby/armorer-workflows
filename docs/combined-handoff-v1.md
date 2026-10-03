@@ -58,6 +58,19 @@ proofs, and digest/source/set mismatches. A separate Node 24 fixture action drop
 unused injected runtime credentials before these tests. The native rehearsal
 uses the same join helper with live provider observations.
 
+Native qualification failures now retain a fixed phase and exception category
+instead of losing the Python worker diagnosis. The worker reports only a closed
+vocabulary; the Node reader drains stderr with a 16 KiB total inspection ceiling
+and 96-byte line bound. Unknown, incomplete, oversized or ambiguous diagnostics
+fall back to fixed generic labels. URLs, response bodies/headers, arbitrary
+exception text and token values never reach output. HTTP categories distinguish
+403, 404, 429 and recognized server errors without printing their messages.
+The labels identify where to investigate; they do not change pins, freshness,
+run state, original private proofs, retry rules or required acceptance. All
+failed worker exits remain failures, and a contradictory successful exit with
+a coded failure is rejected. Source/API/archive, writer join and summary phases
+are distinguished without assigning producer or release authority.
+
 The new workflow ID is discovered from authenticated run metadata **only in this
 qualification mode**. Production controllers need an independent expected ID.
 Rehearsal config/catalog inputs and the assembly runtime identity are explicitly
