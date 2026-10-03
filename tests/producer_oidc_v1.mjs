@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { inspect } from 'node:util';
 import { afterEach, beforeEach, test } from 'node:test';
-import { authenticateProducerContext, producerContextRecord } from '../armorer_runtime/producer_oidc_v1.mjs';
+import { authenticateProducerContext, producerContextRecord } from '../armorer_runtime/producer_oidc_worker_v1.mjs';
 
 const ISSUER = 'https://token.actions.githubusercontent.com';
 const JWKS = `${ISSUER}/.well-known/jwks`;

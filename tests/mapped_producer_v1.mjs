@@ -6,7 +6,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { access } from 'node:fs/promises';
 import { inspect } from 'node:util';
 import { afterEach, beforeEach, test } from 'node:test';
-import { authenticateMappedProducerContext, mappedProducerContextRecord } from '../armorer_runtime/mapped_producer_v1.mjs';
+import { authenticateMappedProducerContext, mappedProducerContextRecord } from '../armorer_runtime/mapped_producer_worker_v1.mjs';
 
 const CLOCK = 2000000000;
 const ISSUER = 'https://token.actions.githubusercontent.com';

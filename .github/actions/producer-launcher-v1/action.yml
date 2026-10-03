@@ -1,0 +1,44 @@
+name: Armorer producer startup boundary v1
+description: Experimental fixed isolated producer authentication; no signing or publication authority
+inputs:
+  node:
+    description: Prepared exact byte-qualified native Node file
+    required: true
+  intent:
+    description: Independently reviewed bounded producer intent file
+    required: true
+  approved-intent-sha256:
+    description: Independently approved digest of the exact intent file
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Launch the fixed producer worker from isolated Python
+      shell: ${{ runner.os == 'Linux' && '/usr/bin/python3 -I {0}' || '/opt/homebrew/bin/python3 -I {0}' }}
+      env:
+        ARMORER_RUNTIME_ROOT: ${{ github.action_path }}/../../..
+        ARMORER_PREPARED_NODE: ${{ inputs.node }}
+        ARMORER_REVIEWED_INTENT: ${{ inputs.intent }}
+        ARMORER_APPROVED_INTENT_DIGEST: ${{ inputs.approved-intent-sha256 }}
+        ARMORER_WORKFLOW_READ_TOKEN: ${{ github.token }}
+        NODE_OPTIONS: ''
+        NODE_EXTRA_CA_CERTS: ''
+        NODE_TLS_REJECT_UNAUTHORIZED: '1'
+        NODE_USE_ENV_PROXY: '0'
+        PYTHONPATH: ''
+        PYTHONHOME: ''
+        LD_PRELOAD: ''
+        LD_LIBRARY_PATH: ''
+        DYLD_INSERT_LIBRARIES: ''
+        DYLD_LIBRARY_PATH: ''
+        BASH_ENV: ''
+        ENV: ''
+      run: |
+        import os
+        import sys
+        sys.path.insert(0, os.environ['ARMORER_RUNTIME_ROOT'])
+        sys.argv = ['armorer-producer-launcher', '--node', os.environ['ARMORER_PREPARED_NODE'],
+                    '--intent', os.environ['ARMORER_REVIEWED_INTENT'],
+                    '--approved-intent-sha256', os.environ['ARMORER_APPROVED_INTENT_DIGEST']]
+        from armorer_runtime.producer_launcher_v1 import main
+        main()

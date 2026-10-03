@@ -6,8 +6,10 @@ identity prerequisite for a future fixed release controller. It does not sign
 bytes, attest an artifact, create a draft, publish, or establish SLSA Build L2.
 
 The controller supplies independently reviewed source, caller, reusable signer,
-exact workflow/job display names and native runner expectations. The public
-`authenticateMappedProducerContext({mapping, oidc})` interface does not accept a
+exact workflow/job display names and native runner expectations. The old public
+Node-first interface now rejects explicitly; a preload can run before its first
+JavaScript check. Use the [Python startup boundary](producer-startup-v1.md).
+The internal worker's `authenticateMappedProducerContext({mapping, oidc})` does not accept a
 check-run ID, token, keyset, offered JSON observation, executable, command, path,
 predicate or provider callback. Source and OIDC expectations must agree. Release
 mode admits only a stable `vMAJOR.MINOR.PATCH` tag or a dispatch at the expected
@@ -23,10 +25,10 @@ attempt/check-run claims. A second full native observation must reproduce the
 canonical snapshot digest and both job identities. Permission revocation, reruns,
 caller/source changes, attempt job changes and environment control changes block
 the join. The worker uses the existing exact observer intent/adapter types with
-its bundled cancellation-aware GET method; older observer and transport bytes
-remain unchanged.
+its bundled cancellation-aware GET method. Native readers also reap their owned
+groups when a leader exits before its pipe-holding descendants.
 
-Only a module-created private in-memory proof can reach
+Within the isolated worker, only a module-created private in-memory proof can reach
 `mappedProducerContextRecord`. Serialized proof construction is denied; audit
 JSON cannot authorize a later stage. Audit use requires a final native view no
 older than 30 seconds and an unexpired issuer proof without clock rollback. IDs
@@ -36,7 +38,7 @@ diagnostics and arbitrary issuer claims.
 
 ## Isolation and capability limits
 
-Node 24 launches only the bundled worker using a fixed Python path:
+The byte-qualified Node 24.21.0 child launches the bundled worker using a fixed Python path:
 `/usr/bin/python3` on Ubuntu 24.04 x86/ARM and `/opt/homebrew/bin/python3` on
 macOS 15 ARM. Python 3.11 or newer is required. A missing or unsupported path is
 an explicit qualification failure; caller `PATH` or a custom interpreter cannot
@@ -46,12 +48,13 @@ checks archive and executable pins, and rehashes the executable before each GET.
 These delivery pins do not authenticate an upstream signature or accept a
 production catalog.
 
-The parent reads `ARMORER_WORKFLOW_READ_TOKEN` only after validating the independent
-intent. Supply the current workflow token with `contents: read` and `actions:
+The launcher supplies `ARMORER_WORKFLOW_READ_TOKEN` through an exact bounded
+environment; its internal worker validates independent intent before native
+reads. Supply the current workflow token with `contents: read` and `actions:
 read`; this helper exposes no mutation routes. The Python worker receives only
 that read token plus fixed path/locale and private home/temp settings. OIDC service
 variables, Apple material, ambient GH credentials, proxy/debug state and Python
-module inputs are excluded. The parent uses the existing platform-provided OIDC
+module inputs are excluded from the native reader. The isolated Node child uses platform-provided OIDC
 request variables through the fixed issuer helper; no credential values are
 returned or persisted. Parent and child use bounded JSON/pipes and private
 temporary directories. Cancellation stops new reads, reaps separate native

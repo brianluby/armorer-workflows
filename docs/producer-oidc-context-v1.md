@@ -6,7 +6,14 @@ release workflow. Native RSA protocol fixtures are synthetic issuer evidence;
 they do not establish a live protected producer, artifact authentication, signing
 approval, an accepted production catalog, or SLSA achievement.
 
-`armorer_runtime/producer_oidc_v1.mjs` has two exports:
+The original Node-hosted entry is retired: both exports in
+`armorer_runtime/producer_oidc_v1.mjs` reject explicitly without reading platform
+variables or HTTP. Use the [startup-safe Python launcher](producer-startup-v1.md).
+Presence checks inside JavaScript cannot detect a preload that already ran and
+erased its marker. No legacy fallback is available.
+
+Within the launcher's fresh fixed worker, internal
+`producer_oidc_worker_v1.mjs` primitives provide:
 
 - `authenticateProducerContext(intent)` requests the current job token and
   verifies it before returning a private, frozen, in-memory proof.
@@ -108,12 +115,15 @@ false: `environment_protection_authenticated`, `artifact_producer_authenticated`
 `cryptographic_release_authenticated`, `production_catalog_accepted`,
 `signing_authorized`, and `publication_authorized`.
 
-The development workflow runs the fixed fixture suite on the Actions Node 24
+The development workflow runs the internal fixed fixture suite on the Actions Node 24
 runtime on Linux x86_64, Linux ARM64 and macOS ARM64. Its permissions remain
 unprivileged and no live OIDC token is requested. Tests use ephemeral RSA keys
 in memory and restore synthetic platform state after each case. The timeout
 regression exercises the real ten-second limit with a reader and cancellation
-that ignore abort. Local Node 22 runs are compatibility evidence only.
+that ignore abort. A separate startup suite executes byte-qualified Node 24.21.0
+with a real credential-reading preload and synthetic RSA positive. Local Node
+22/26 runs are compatibility evidence only. No live OIDC or production catalog
+acceptance follows from these fixtures.
 
 Before release integration, required work includes independent accepted roots,
 fresh authenticated source/actor/ancestry context, exact current job mapping,
