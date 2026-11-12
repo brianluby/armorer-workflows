@@ -76,6 +76,10 @@ jobs:
           fixed.run([str(cargo), "build", "--locked", "--manifest-path", str(destination / "Cargo.toml")],
                     cwd=destination, env=environment)
           PY
+      - name: Install exact schema-validation interpreter
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.14"
       - name: Qualify complete native unsigned handoffs without executing payloads
         env:
           RUNNER_SCRATCH: ${{ runner.temp }}
