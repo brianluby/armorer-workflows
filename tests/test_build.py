@@ -12,7 +12,7 @@ import unittest
 from armorer_runtime.build import (
     BuildError, _file_record, _run, build_arguments, compiler_evidence,
     metadata_adapter, parse_json, reconcile_metadata, validate_sbom,
-    verify_inventory, require_clean_source,
+    verify_inventory, require_clean_source, require_clean_runtime,
 )
 
 
@@ -69,6 +69,32 @@ class GraphTests(unittest.TestCase):
             with self.assertRaises(BuildError):
                 require_clean_source(root, environment)
             self.assertFalse((root / "output").exists())
+
+    def test_runtime_integrity_requires_committed_v3_entry_and_rejects_untracked_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            environment = {"PATH": "/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+            _run(["/usr/bin/git", "init", "-q"], root, environment)
+            files = ["armorer_runtime/__init__.py", "armorer_runtime/build.py", "armorer_runtime/common.py",
+                     "armorer_runtime/tools.py", "armorer_runtime/graph.py", "armorer_runtime/build_v2.py",
+                     "pins/tools.json"]
+            for relative in files:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}\n" if relative.endswith(".json") else "# fixture\n")
+            commit = ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false"]
+            _run(["/usr/bin/git", "add", "."], root, environment)
+            _run(["/usr/bin/git", *commit, "commit", "-qm", "fixture"], root, environment)
+            require_clean_runtime(root, environment, selected_graph_v2=True, selected_handoff_v3=False)
+            with self.assertRaisesRegex(BuildError, "committed inputs"):
+                require_clean_runtime(root, environment, selected_graph_v2=True, selected_handoff_v3=True)
+            (root / "armorer_runtime" / "build_v3.py").write_text("# fixture\n")
+            _run(["/usr/bin/git", "add", "."], root, environment)
+            _run(["/usr/bin/git", *commit, "commit", "-qm", "v3 entry"], root, environment)
+            require_clean_runtime(root, environment, selected_graph_v2=True, selected_handoff_v3=True)
+            (root / "armorer_runtime" / "untracked.py").write_text("# untracked runtime input\n")
+            with self.assertRaises(BuildError):
+                require_clean_runtime(root, environment, selected_graph_v2=True, selected_handoff_v3=True)
 
     def test_timeout_kills_descendant_processes_before_cleanup(self):
         with tempfile.TemporaryDirectory() as temporary:

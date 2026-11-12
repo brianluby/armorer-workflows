@@ -7,8 +7,6 @@ import io
 from pathlib import Path, PurePosixPath
 import re
 import tarfile
-import time
-import urllib.request
 
 from . import common, tools
 from .build import parse_json
@@ -131,21 +129,11 @@ def install(destination: Path) -> tuple[dict[str, QualifiedTool], dict]:
     require(target in common.RUNNERS and not destination.exists() and not destination.is_symlink(),
             "policy tools require a new private native destination")
     destination.mkdir(mode=0o700)
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     result = {}
     for name, tool in sorted(catalog["tools"].items()):
         pin = tool["platforms"][target]
-        deadline = time.monotonic() + 300
-        data = bytearray()
-        with opener.open(pin["url"], timeout=30) as response:
-            while True:
-                require(time.monotonic() <= deadline, "policy tool download timed out")
-                block = response.read(min(65536, pin["distribution"]["size"] + 1 - len(data)))
-                if not block:
-                    break
-                data.extend(block)
-                require(len(data) <= pin["distribution"]["size"], "policy tool download size mismatch")
-        executable = extract(bytes(data), pin, target)
+        data = tools.download(pin["url"], pin["distribution"]["size"])
+        executable = extract(data, pin, target)
         path = destination / name
         with path.open("xb") as stream:
             stream.write(executable)

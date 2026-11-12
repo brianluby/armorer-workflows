@@ -21,11 +21,10 @@ import sys
 import tarfile
 import tempfile
 import time
-import urllib.request
 
 from .build import parse_json
 from .common import Failure, require
-from .tools import platform_target
+from .tools import download, platform_target
 from .transport_v1 import _identity
 
 ROOT = Path(__file__).resolve().parent
@@ -56,11 +55,8 @@ def prepare_node(destination: Path):
     name = f'node-v{VERSION}-{label}'
     url = f'https://nodejs.org/dist/v{VERSION}/{name}.tar.gz'
     require(not destination.is_symlink() and not destination.exists(), 'producer node destination unavailable')
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with opener.open(url, timeout=60) as response:
-            require(response.geturl() == url and response.status == 200, 'producer node origin mismatch')
-            data = response.read(size + 1)
+        data = download(url, size, exact_origin=True)
         require(len(data) == size and hashlib.sha256(data).hexdigest() == digest, 'producer node distribution mismatch')
         with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
             selected, count = [], 0

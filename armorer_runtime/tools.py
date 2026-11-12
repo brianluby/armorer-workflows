@@ -7,6 +7,7 @@ import json
 from pathlib import Path, PurePosixPath
 import platform
 import tarfile
+import time
 import urllib.request
 
 from .common import Failure, require, sha256
@@ -51,6 +52,26 @@ def extract_binary(data: bytes, binary: str, archive_format: str) -> bytes:
     return found[0]
 
 
+def download(url: str, limit: int, *, exact_origin: bool = False) -> bytes:
+    """Fetch one fixed public URL without ambient proxy, off-HTTPS delivery or an unbounded read."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    deadline = time.monotonic() + 300
+    data = bytearray()
+    with opener.open(url, timeout=60) as response:
+        final = response.geturl()
+        require(final == url if exact_origin else final.startswith("https://"),
+                "tool delivery requires the expected HTTPS origin")
+        require(response.status == 200, "tool delivery requires an exact success response")
+        while True:
+            require(time.monotonic() <= deadline, "tool download timed out")
+            block = response.read(min(65536, limit + 1 - len(data)))
+            if not block:
+                break
+            data.extend(block)
+            require(len(data) <= limit, "tool download size limit exceeded")
+    return bytes(data)
+
+
 def install_tools(destination: Path, names: list[str]) -> dict[str, Path]:
     """No environment or consumer configuration can supply URLs or digests."""
     require(not destination.is_symlink(), "tool destination may not be a symlink")
@@ -67,11 +88,9 @@ def install_tools(destination: Path, names: list[str]) -> dict[str, Path]:
         distribution = tool["platforms"][target]
         require(distribution["url"].startswith("https://github.com/"), "untrusted catalog origin")
         try:
-            with urllib.request.urlopen(distribution["url"], timeout=60) as response:
-                data = response.read(MAX_ARCHIVE + 1)
+            data = download(distribution["url"], MAX_ARCHIVE)
         except (OSError, ValueError) as error:
             raise Failure("reviewed tool download failed") from error
-        require(len(data) <= MAX_ARCHIVE, "tool archive size limit exceeded")
         require(sha256(data) == distribution["sha256"], "tool distribution digest mismatch")
         output = extract_binary(data, tool["binary"], distribution["format"])
         path = destination / tool["binary"]

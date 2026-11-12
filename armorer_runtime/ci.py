@@ -37,7 +37,8 @@ def load_policy(root: Path, today: date | None = None) -> dict:
     require(isinstance(licenses, list) and 0 < len(licenses) <= 128 and all(isinstance(v, str) for v in licenses) and
             len(set(licenses)) == len(licenses),
             "explicit nonempty license allowlist required")
-    require(all(isinstance(value, str) and LICENSE.fullmatch(value) for value in licenses), "invalid license identifier")
+    require(all(isinstance(value, str) and len(value) <= 128 and LICENSE.fullmatch(value) for value in licenses),
+            "invalid license identifier")
     exact_fields(policy["advisories"], {"exceptions"})
     exceptions = policy["advisories"]["exceptions"]
     require(isinstance(exceptions, list) and len(exceptions) <= 32, "advisory exception count exceeds limit")
@@ -62,7 +63,8 @@ def load_policy(root: Path, today: date | None = None) -> dict:
     git = policy["sources"]["allow_git"]
     require(isinstance(git, list) and len(git) <= 32 and all(isinstance(v, str) for v in git) and
             len(set(git)) == len(git), "invalid allowed source list")
-    require(all(isinstance(url, str) and re.fullmatch(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\.git)?", url)
+    require(all(isinstance(url, str) and len(url) <= 2048 and
+                re.fullmatch(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\.git)?", url)
                 for url in git), "allowed Git sources must be explicit public GitHub repositories")
     exact_fields(policy["bans"], {"multiple_versions", "deny"})
     require(policy["bans"]["multiple_versions"] in ("warn", "deny"), "invalid duplicate-version policy")

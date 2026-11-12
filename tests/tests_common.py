@@ -8,7 +8,7 @@ import tarfile
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from armorer_runtime import common, tools
 
@@ -146,10 +146,53 @@ class CommonTests(unittest.TestCase):
             catalog.write_text(json.dumps({"schema_version": 1, "tools": {"tool": {"binary": "tool", "platforms": {
                 "x86_64-unknown-linux-gnu": {"url": "https://github.com/example/tool", "sha256": "0" * 64, "format": "binary"}}}}}))
             with patch.object(tools, "CATALOG", catalog), patch.object(tools, "platform_target", return_value="x86_64-unknown-linux-gnu"), \
-                    patch("urllib.request.urlopen", return_value=io.BytesIO(b"tampered bytes")):
+                    patch.object(tools, "download", return_value=b"tampered bytes"):
                 with self.assertRaisesRegex(common.Failure, "digest mismatch"):
                     tools.install_tools(root / "installed", ["tool"])
                 self.assertEqual(list((root / "installed").iterdir()), [])
+
+    def _response(self, final_url, data=b"payload", status=200):
+        response = MagicMock()
+        response.geturl.return_value = final_url
+        response.status = status
+        response.read.side_effect = [data, b""]
+        return response
+
+    def test_download_rejects_http_downgrade_and_off_origin_redirects_without_proxy(self):
+        url = "https://github.com/example/tool"
+        for final, exact in (("http://cdn.example/tool", False), ("https://cdn.example/tool", True)):
+            opener = MagicMock()
+            opener.open.return_value.__enter__.return_value = self._response(final)
+            with self.subTest(final=final), patch.object(tools.urllib.request, "build_opener", return_value=opener) as factory:
+                with self.assertRaisesRegex(common.Failure, "HTTPS origin"):
+                    tools.download(url, 1024, exact_origin=exact)
+                handler = factory.call_args[0][0]
+                self.assertIsInstance(handler, tools.urllib.request.ProxyHandler)
+                self.assertEqual(handler.proxies, {})
+
+    def test_download_enforces_size_cap_and_total_deadline(self):
+        url = "https://github.com/example/tool"
+        opener = MagicMock()
+        opener.open.return_value.__enter__.return_value = self._response(url, data=b"x" * 65)
+        with patch.object(tools.urllib.request, "build_opener", return_value=opener):
+            with self.assertRaisesRegex(common.Failure, "size limit"):
+                tools.download(url, 64)
+        opener.open.return_value.__enter__.return_value = self._response(url)
+        with patch.object(tools.urllib.request, "build_opener", return_value=opener), \
+                patch.object(tools.time, "monotonic", side_effect=[0, 301]):
+            with self.assertRaisesRegex(common.Failure, "timed out"):
+                tools.download(url, 64)
+
+    def test_download_requires_success_status_and_returns_exact_https_bytes(self):
+        url = "https://github.com/example/tool"
+        opener = MagicMock()
+        opener.open.return_value.__enter__.return_value = self._response(url)
+        with patch.object(tools.urllib.request, "build_opener", return_value=opener):
+            self.assertEqual(tools.download(url, 64), b"payload")
+        opener.open.return_value.__enter__.return_value = self._response(url, status=404)
+        with patch.object(tools.urllib.request, "build_opener", return_value=opener):
+            with self.assertRaisesRegex(common.Failure, "success response"):
+                tools.download(url, 64)
 
 
 if __name__ == "__main__":
