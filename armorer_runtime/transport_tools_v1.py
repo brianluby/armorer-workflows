@@ -12,12 +12,11 @@ import os
 from pathlib import Path, PurePosixPath
 import stat
 import tarfile
-import urllib.request
 import zipfile
 import zlib
 
 from .common import Failure, require
-from .tools import platform_target
+from .tools import download, platform_target
 from .transport_v1 import GH_PINS, GH_SOURCE, GH_VERSION, _identity
 
 MANIFEST_SHA256 = "afe49e9affa232faa8212aed035417166f6ade9b9470acb53d4dbd28c0504e8d"
@@ -100,10 +99,7 @@ def _binary(data: bytes, distribution: dict, native_size: int) -> bytes:
 def _download(distribution: dict) -> bytes:
     """Fetch a fixed public distribution without ambient proxy or authentication inputs."""
     url = f"https://github.com/cli/cli/releases/download/v{GH_VERSION}/" + distribution["name"]
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    with opener.open(url, timeout=60) as response:
-        require(response.geturl().startswith("https://"), "native GitHub delivery requires HTTPS")
-        return response.read(MAX_ARCHIVE + 1)
+    return download(url, MAX_ARCHIVE)
 
 
 def install_gh(destination: Path) -> tuple[Path, dict]:

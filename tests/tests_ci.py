@@ -67,6 +67,22 @@ class PolicyTests(unittest.TestCase):
             with self.assertRaises(common.Failure):
                 ci.load_policy(root)
 
+    def test_license_and_git_source_lengths_match_observation_schema_bounds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_policy(root, POLICY.replace('allow = ["MIT", "Apache-2.0"]', 'allow = ["' + "A" * 128 + '"]'))
+            self.assertEqual(ci.load_policy(root)["licenses"]["allow"], ["A" * 128])
+            write_policy(root, POLICY.replace('allow = ["MIT", "Apache-2.0"]', 'allow = ["' + "A" * 129 + '"]'))
+            with self.assertRaisesRegex(common.Failure, "invalid license identifier"):
+                ci.load_policy(root)
+            bounded_git = "https://github.com/" + "a" * 1024 + "/" + "b" * 1004
+            self.assertEqual(len(bounded_git), 2048)
+            write_policy(root, POLICY.replace("allow_git = []", 'allow_git = ["' + bounded_git + '"]'))
+            self.assertEqual(ci.load_policy(root)["sources"]["allow_git"], [bounded_git])
+            write_policy(root, POLICY.replace("allow_git = []", 'allow_git = ["' + bounded_git + 'x"]'))
+            with self.assertRaisesRegex(common.Failure, "explicit public GitHub repositories"):
+                ci.load_policy(root)
+
     def test_expired_unbounded_or_unowned_advisory_exceptions_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

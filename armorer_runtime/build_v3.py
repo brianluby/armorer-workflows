@@ -152,7 +152,7 @@ def verify_handoff_v3(directory: Path, expected_selection: dict, expected_contex
 def build_v3(root: Path, armorer: Path, artifact_id: str, output: Path) -> dict:
     """Retain actual unsigned builder wall-clock observations around the unchanged v2 build operation."""
     started = int(time.time())
-    inventory = build_v2(root, armorer, artifact_id, output)
+    inventory = build_v2(root, armorer, artifact_id, output, selected_handoff_v3=True)
     finished = int(time.time())
     graph = parse_json(_regular_bytes(output / (artifact_id + ".cargo-graph.json"), MAX_METADATA))
     context = {key: inventory[key] for key in ("source", "runtime_commit", "run_id", "run_attempt")}

@@ -469,7 +469,24 @@ def require_clean_source(root: Path, environment: dict) -> None:
         raise BuildError("untracked source inputs require a clean checkout")
 
 
-def _build(root: Path, armorer: Path, artifact_id: str, output: Path, *, selected_graph_v2: bool) -> dict:
+def require_clean_runtime(runtime_root: Path, environment: dict, *, selected_graph_v2: bool,
+                          selected_handoff_v3: bool) -> dict[str, str]:
+    """Require the executing trusted runtime to be committed, unmodified and free of untracked files."""
+    required = {"armorer_runtime/__init__.py", "armorer_runtime/build.py", "armorer_runtime/common.py",
+                "armorer_runtime/tools.py", "pins/tools.json"}
+    if selected_graph_v2:
+        required.update({"armorer_runtime/graph.py", "armorer_runtime/build_v2.py"})
+    if selected_handoff_v3:
+        required.add("armorer_runtime/build_v3.py")
+    inputs = _tracked_inputs(runtime_root, environment)
+    if not required <= inputs.keys():
+        raise BuildError("trusted runtime helpers must be committed inputs")
+    require_clean_source(runtime_root, environment)
+    return inputs
+
+
+def _build(root: Path, armorer: Path, artifact_id: str, output: Path, *, selected_graph_v2: bool,
+           selected_handoff_v3: bool = False) -> dict:
     """Build one rederived selection, validate its SBOM, and inventory bytes."""
     from armorer_runtime.common import load_project, select, member_manifest, cargo_environment, setup_toolchain
     from armorer_runtime.tools import install_tools, platform_target
@@ -498,13 +515,8 @@ def _build(root: Path, armorer: Path, artifact_id: str, output: Path, *, selecte
         runtime_commit = _run(["/usr/bin/git", "rev-parse", "HEAD"], runtime_root, environment).decode().strip()
         if not re.fullmatch(r"[0-9a-f]{40}", runtime_commit):
             raise BuildError("unsupported trusted runtime commit identity")
-        runtime_inputs = _tracked_inputs(runtime_root, environment)
-        required_runtime = {"armorer_runtime/__init__.py", "armorer_runtime/build.py", "armorer_runtime/common.py", "armorer_runtime/tools.py", "pins/tools.json"}
-        if selected_graph_v2:
-            required_runtime.update({"armorer_runtime/graph.py", "armorer_runtime/build_v2.py"})
-        if not required_runtime <= runtime_inputs.keys():
-            raise BuildError("trusted runtime helpers must be committed inputs")
-        _run(["/usr/bin/git", "diff-index", "--quiet", "HEAD", "--"], runtime_root, environment)
+        runtime_inputs = require_clean_runtime(runtime_root, environment, selected_graph_v2=selected_graph_v2,
+                                               selected_handoff_v3=selected_handoff_v3)
         # The runtime tool paths were established before caller code executes.
         source_commit = _run(["/usr/bin/git", "rev-parse", "HEAD"], root, environment).decode().strip()
         if not re.fullmatch(r"[0-9a-f]{40}", source_commit):
@@ -623,9 +635,9 @@ def build(root: Path, armorer: Path, artifact_id: str, output: Path) -> dict:
     return _build(root, armorer, artifact_id, output, selected_graph_v2=False)
 
 
-def build_v2(root: Path, armorer: Path, artifact_id: str, output: Path) -> dict:
+def build_v2(root: Path, armorer: Path, artifact_id: str, output: Path, *, selected_handoff_v3: bool = False) -> dict:
     """Run the explicit successor builder retaining source/run-bound selected graph version two."""
-    return _build(root, armorer, artifact_id, output, selected_graph_v2=True)
+    return _build(root, armorer, artifact_id, output, selected_graph_v2=True, selected_handoff_v3=selected_handoff_v3)
 
 
 def main() -> None:
