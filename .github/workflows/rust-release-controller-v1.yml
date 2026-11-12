@@ -1,0 +1,312 @@
+name: Armorer release controller v1
+
+# Reusable publication controller. Inert until a caller supplies the digest-pinned approvals and a
+# built armorer binary; there is no push/pull_request trigger here. The caller repository owns the
+# release-publish environment and its required reviewers. No signing or attestation secrets are used.
+on:
+  workflow_call:
+    inputs:
+      armorer:
+        description: Absolute path to the built, independently qualified armorer binary
+        required: true
+        type: string
+      gh:
+        description: Absolute path to the independently qualified native gh used for fixed reads/writes
+        required: true
+        type: string
+      directory:
+        description: Directory of authenticated release assets
+        required: true
+        type: string
+      trusted-inputs:
+        description: Independently reviewed trusted-inputs directory
+        required: true
+        type: string
+      context-sha256:
+        description: Independently approved context SHA-256
+        required: true
+        type: string
+      context-kind:
+        description: Context contract kind (native-v3, native-v2 or legacy-v1)
+        required: true
+        type: string
+      publication-policy:
+        description: Independently approved publication policy file
+        required: true
+        type: string
+      publication-policy-sha256:
+        description: Independently approved publication policy SHA-256
+        required: true
+        type: string
+      trusted-root:
+        description: Independently approved sigstore trusted root for offline verification
+        required: true
+        type: string
+      release-attestation-root:
+        description: Independently approved release attestation root
+        required: true
+        type: string
+      cyclonedx:
+        description: Independently approved CycloneDX validator binary
+        required: true
+        type: string
+      state-directory:
+        description: Owner-only publication state directory
+        required: true
+        type: string
+      stage-approval:
+        description: Separately approved draft-staging approval file (empty skips staging)
+        required: false
+        type: string
+        default: ''
+      stage-approval-sha256:
+        description: Independently approved staging approval SHA-256
+        required: false
+        type: string
+        default: ''
+      publish-approval:
+        description: Separately approved publication approval file (empty skips publication)
+        required: false
+        type: string
+        default: ''
+      publish-approval-sha256:
+        description: Independently approved publication approval SHA-256
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # The caller repository's protected environment; required reviewers gate entry before any step.
+    environment: release-publish
+    # Real runner-wide serialization: one controller at a time, never cancel an in-flight publication.
+    concurrency:
+      group: armorer-release-controller
+      cancel-in-progress: false
+    # Scoped to the single writing job: deployments:write binds the attempt; contents:write is
+    # required for the armorer release create/publish; actions:read lets the adapter observe run
+    # approvals. No signing/attestation permission or secret is granted.
+    permissions:
+      contents: write
+      deployments: write
+      actions: read
+    # Fix the startup environment before any step receives the job token (producer-startup-v1).
+    env:
+      NODE_OPTIONS: ''
+      NODE_EXTRA_CA_CERTS: ''
+      NODE_TLS_REJECT_UNAUTHORIZED: '1'
+      NODE_USE_ENV_PROXY: '0'
+      PYTHONPATH: ''
+      PYTHONHOME: ''
+      LD_PRELOAD: ''
+      LD_LIBRARY_PATH: ''
+      LD_AUDIT: ''
+      GCONV_PATH: ''
+      LOCPATH: ''
+      GLIBC_TUNABLES: ''
+      LD_PROFILE: ''
+      LD_PROFILE_OUTPUT: ''
+      LD_DEBUG: ''
+      LD_DEBUG_OUTPUT: ''
+      DYLD_INSERT_LIBRARIES: ''
+      DYLD_LIBRARY_PATH: ''
+      DYLD_FRAMEWORK_PATH: ''
+      DYLD_FALLBACK_LIBRARY_PATH: ''
+      DYLD_FALLBACK_FRAMEWORK_PATH: ''
+      DYLD_ROOT_PATH: ''
+      OPENSSL_CONF: '/dev/null'
+      OPENSSL_MODULES: ''
+      OPENSSL_ENGINES: ''
+      SSL_CERT_FILE: ''
+      SSL_CERT_DIR: ''
+      CURL_CA_BUNDLE: ''
+      REQUESTS_CA_BUNDLE: ''
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      ALL_PROXY: ''
+      NO_PROXY: ''
+    steps:
+      - name: Validate trusted workflow identity
+        id: trusted
+        env:
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, re
+          context = json.loads(os.environ["JOB_CONTEXT"])
+          assert context.get("workflow_repository") == "brianluby/armorer-workflows", "Unsupported workflow source"
+          sha = context.get("workflow_sha", "")
+          assert re.fullmatch(r"[0-9a-f]{40}", sha), "Missing immutable reusable workflow source identity"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("sha=" + sha + "\n")
+          PY
+      - name: Checkout trusted runtime at the executing workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer-workflows
+          ref: ${{ steps.trusted.outputs.sha }}
+          path: runtime-source
+          persist-credentials: false
+      # Bind this exact run/attempt BEFORE any publication write. The deployment payload keys mirror
+      # the native Rust adapter; auto_merge:false keeps the frozen sha, required_contexts:[] because
+      # commit-status checks are not the publication gate (environment reviewers + adapter gates are).
+      - name: Create the attempt-bound deployment and mark it active
+        id: deployment
+        env:
+          GH: ${{ inputs.gh }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, subprocess, sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "runtime-source"))
+          from armorer_runtime import controller_deployment_v1 as deployment
+
+          run_id = int(os.environ["RUN_ID"])
+          run_attempt = int(os.environ["RUN_ATTEMPT"])
+          commit = os.environ["SOURCE_COMMIT"]
+          repository = os.environ["REPOSITORY"]
+          gh = os.environ["GH"]
+          env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "C.UTF-8", "GH_HOST": "github.com",
+                 "GH_PROMPT_DISABLED": "1", "GH_PAGER": "cat", "GH_NO_UPDATE_NOTIFIER": "1",
+                 "NO_COLOR": "1", "GH_TOKEN": os.environ["GH_TOKEN"]}
+
+          def post(route, body):
+              with tempfile.TemporaryDirectory(prefix="armorer-deploy-") as scratch:
+                  payload = Path(scratch) / "body.json"
+                  payload.write_text(json.dumps(body), encoding="utf-8")
+                  result = subprocess.run(
+                      [gh, "api", "--method", "POST", route, "--input", str(payload),
+                       "-H", "Accept: application/vnd.github+json",
+                       "-H", "X-GitHub-Api-Version: 2026-03-10"],
+                      env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=120, check=True)
+                  return json.loads(result.stdout)
+
+          created = post(deployment.deployment_route(repository),
+                         deployment.create_deployment_body(run_id, run_attempt, commit))
+          deployment_id = created["id"]
+          post(deployment.status_route(repository, deployment_id), deployment.active_status_body())
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"deployment_id={deployment_id}\n")
+          PY
+      - name: Inspect native publication prerequisites without writes
+        env:
+          ARMORER: ${{ inputs.armorer }}
+          GH: ${{ inputs.gh }}
+          GH_TOKEN: ${{ github.token }}
+          DIRECTORY: ${{ inputs.directory }}
+          TRUSTED_INPUTS: ${{ inputs.trusted-inputs }}
+          CONTEXT_SHA256: ${{ inputs.context-sha256 }}
+          CONTEXT_KIND: ${{ inputs.context-kind }}
+          PUBLICATION_POLICY: ${{ inputs.publication-policy }}
+          PUBLICATION_POLICY_SHA256: ${{ inputs.publication-policy-sha256 }}
+          TRUSTED_ROOT: ${{ inputs.trusted-root }}
+          RELEASE_ATTESTATION_ROOT: ${{ inputs.release-attestation-root }}
+          CYCLONEDX: ${{ inputs.cyclonedx }}
+          STATE_DIRECTORY: ${{ inputs.state-directory }}
+        run: |
+          "$ARMORER" publication \
+            --directory "$DIRECTORY" --trusted-inputs "$TRUSTED_INPUTS" \
+            --expect-context-sha256 "$CONTEXT_SHA256" --context-kind "$CONTEXT_KIND" \
+            --gh "$GH" --trusted-root "$TRUSTED_ROOT" --cyclonedx "$CYCLONEDX" \
+            --publication-policy "$PUBLICATION_POLICY" \
+            --expect-publication-policy-sha256 "$PUBLICATION_POLICY_SHA256" \
+            --release-attestation-root "$RELEASE_ATTESTATION_ROOT" \
+            inspect --state-directory "$STATE_DIRECTORY"
+      - name: Stage the separately approved owned draft
+        if: inputs.stage-approval != ''
+        env:
+          ARMORER: ${{ inputs.armorer }}
+          GH: ${{ inputs.gh }}
+          GH_TOKEN: ${{ github.token }}
+          DIRECTORY: ${{ inputs.directory }}
+          TRUSTED_INPUTS: ${{ inputs.trusted-inputs }}
+          CONTEXT_SHA256: ${{ inputs.context-sha256 }}
+          CONTEXT_KIND: ${{ inputs.context-kind }}
+          PUBLICATION_POLICY: ${{ inputs.publication-policy }}
+          PUBLICATION_POLICY_SHA256: ${{ inputs.publication-policy-sha256 }}
+          TRUSTED_ROOT: ${{ inputs.trusted-root }}
+          RELEASE_ATTESTATION_ROOT: ${{ inputs.release-attestation-root }}
+          CYCLONEDX: ${{ inputs.cyclonedx }}
+          STATE_DIRECTORY: ${{ inputs.state-directory }}
+          APPROVAL: ${{ inputs.stage-approval }}
+          APPROVAL_SHA256: ${{ inputs.stage-approval-sha256 }}
+        run: |
+          "$ARMORER" publication \
+            --directory "$DIRECTORY" --trusted-inputs "$TRUSTED_INPUTS" \
+            --expect-context-sha256 "$CONTEXT_SHA256" --context-kind "$CONTEXT_KIND" \
+            --gh "$GH" --trusted-root "$TRUSTED_ROOT" --cyclonedx "$CYCLONEDX" \
+            --publication-policy "$PUBLICATION_POLICY" \
+            --expect-publication-policy-sha256 "$PUBLICATION_POLICY_SHA256" \
+            --release-attestation-root "$RELEASE_ATTESTATION_ROOT" \
+            stage --approval "$APPROVAL" --expect-approval-sha256 "$APPROVAL_SHA256" \
+            --state-directory "$STATE_DIRECTORY"
+      - name: Publish the separately approved exact draft
+        if: inputs.publish-approval != ''
+        env:
+          ARMORER: ${{ inputs.armorer }}
+          GH: ${{ inputs.gh }}
+          GH_TOKEN: ${{ github.token }}
+          DIRECTORY: ${{ inputs.directory }}
+          TRUSTED_INPUTS: ${{ inputs.trusted-inputs }}
+          CONTEXT_SHA256: ${{ inputs.context-sha256 }}
+          CONTEXT_KIND: ${{ inputs.context-kind }}
+          PUBLICATION_POLICY: ${{ inputs.publication-policy }}
+          PUBLICATION_POLICY_SHA256: ${{ inputs.publication-policy-sha256 }}
+          TRUSTED_ROOT: ${{ inputs.trusted-root }}
+          RELEASE_ATTESTATION_ROOT: ${{ inputs.release-attestation-root }}
+          CYCLONEDX: ${{ inputs.cyclonedx }}
+          STATE_DIRECTORY: ${{ inputs.state-directory }}
+          APPROVAL: ${{ inputs.publish-approval }}
+          APPROVAL_SHA256: ${{ inputs.publish-approval-sha256 }}
+        run: |
+          "$ARMORER" publication \
+            --directory "$DIRECTORY" --trusted-inputs "$TRUSTED_INPUTS" \
+            --expect-context-sha256 "$CONTEXT_SHA256" --context-kind "$CONTEXT_KIND" \
+            --gh "$GH" --trusted-root "$TRUSTED_ROOT" --cyclonedx "$CYCLONEDX" \
+            --publication-policy "$PUBLICATION_POLICY" \
+            --expect-publication-policy-sha256 "$PUBLICATION_POLICY_SHA256" \
+            --release-attestation-root "$RELEASE_ATTESTATION_ROOT" \
+            publish --approval "$APPROVAL" --expect-approval-sha256 "$APPROVAL_SHA256" \
+            --state-directory "$STATE_DIRECTORY"
+      # Release the environment so a completed or failed attempt does not hold serialization hostage.
+      - name: Mark the deployment inactive
+        if: always()
+        env:
+          GH: ${{ inputs.gh }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, subprocess, sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "runtime-source"))
+          from armorer_runtime import controller_deployment_v1 as deployment
+
+          deployment_id = os.environ.get("DEPLOYMENT_ID", "")
+          if not deployment_id:
+              sys.exit(0)
+          repository = os.environ["REPOSITORY"]
+          env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "C.UTF-8", "GH_HOST": "github.com",
+                 "GH_PROMPT_DISABLED": "1", "GH_PAGER": "cat", "GH_NO_UPDATE_NOTIFIER": "1",
+                 "NO_COLOR": "1", "GH_TOKEN": os.environ["GH_TOKEN"]}
+          with tempfile.TemporaryDirectory(prefix="armorer-deploy-") as scratch:
+              payload = Path(scratch) / "body.json"
+              payload.write_text(json.dumps({"state": "inactive"}), encoding="utf-8")
+              subprocess.run(
+                  [os.environ["GH"], "api", "--method", "POST",
+                   deployment.status_route(repository, int(deployment_id)), "--input", str(payload),
+                   "-H", "Accept: application/vnd.github+json",
+                   "-H", "X-GitHub-Api-Version: 2026-03-10"],
+                  env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=120, check=True)
+          PY
