@@ -68,6 +68,21 @@ subject. This is required, not stylistic: in the pinned action manifest,
 Unsigned bytes can never become an attestation subject: `verify` fails closed
 before any subject path is exposed.
 
+### Attestation subjects and the inventory boundary
+
+The subjects here are the final signed archive, its authenticated consumer
+evidence (`<key>.build.json`) and the carried-forward CycloneDX SBOM. The
+release-level **authenticated inventory** (`armorer-release-inventory.json`
+plus its provenance bundle) is a separate stage owned by
+`armorer_runtime.final_payload_v1`, and it deliberately cannot represent Apple
+executables in v0.1: that module rejects any non-library selection targeting
+`aarch64-apple-darwin` because its evidence contract has no Apple assertion
+slots. This workflow therefore does not invent an inventory subject for signed
+Apple bytes; joining the signed set into a release inventory is the
+controller's reviewed step, and the consumer validates that inventory against
+its own bundle. Do not attest unsigned bytes or a fabricated inventory to
+close that gap.
+
 ## Pins
 
 | Reference | Commit |
