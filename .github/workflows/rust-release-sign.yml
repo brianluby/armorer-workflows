@@ -1,0 +1,287 @@
+name: Armorer protected Apple signing v1
+
+# Reusable protected signing producer. Inert until the caller supplies a digest-pinned owner
+# approval and the unsigned build-v3 handoffs from this same run. The caller repository owns the
+# release-signing environment and its required reviewers; no publication or tag authority exists.
+# Credentials are referenced by NAME only and live solely in the gated shell step. PR events never
+# receive signing access. Satisfies docs/producer-startup-v1.md: the whole job fixes its startup
+# environment before any earlier action can receive credentials, and all orchestration runs in
+# isolated Python (python3 -I); there is no Node-first entry.
+on:
+  workflow_call:
+    inputs:
+      approval:
+        description: Absolute path to the independently reviewed signing approval file
+        required: true
+        type: string
+      approval-sha256:
+        description: Independently approved SHA-256 of the exact approval bytes
+        required: true
+        type: string
+    secrets:
+      APPLE_CERTIFICATE_P12_BASE64:
+        required: false
+      APPLE_CERTIFICATE_PASSWORD:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_APP_SPECIFIC_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    # Signing is a release operation. PR events never receive signing access.
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: macos-15
+    timeout-minutes: 45
+    # This environment belongs to the CALLER repository. Protect it there.
+    environment: release-signing
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Whole-job startup boundary (producer-startup-v1): clear every interpreter/loader/proxy
+      # injection vector before any action receives credentials.
+      NODE_OPTIONS: ''
+      NODE_EXTRA_CA_CERTS: ''
+      NODE_TLS_REJECT_UNAUTHORIZED: '1'
+      NODE_USE_ENV_PROXY: '0'
+      PYTHONPATH: ''
+      PYTHONHOME: ''
+      LD_PRELOAD: ''
+      LD_LIBRARY_PATH: ''
+      LD_AUDIT: ''
+      GCONV_PATH: ''
+      LOCPATH: ''
+      GLIBC_TUNABLES: ''
+      LD_PROFILE: ''
+      LD_PROFILE_OUTPUT: ''
+      LD_DEBUG: ''
+      LD_DEBUG_OUTPUT: ''
+      DYLD_INSERT_LIBRARIES: ''
+      DYLD_LIBRARY_PATH: ''
+      DYLD_FRAMEWORK_PATH: ''
+      DYLD_FALLBACK_LIBRARY_PATH: ''
+      DYLD_FALLBACK_FRAMEWORK_PATH: ''
+      DYLD_ROOT_PATH: ''
+      OPENSSL_CONF: '/dev/null'
+      OPENSSL_MODULES: ''
+      OPENSSL_ENGINES: ''
+      SSL_CERT_FILE: ''
+      SSL_CERT_DIR: ''
+      CURL_CA_BUNDLE: ''
+      REQUESTS_CA_BUNDLE: ''
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      ALL_PROXY: ''
+      NO_PROXY: ''
+      APPROVAL: ${{ inputs.approval }}
+      APPROVAL_SHA256: ${{ inputs.approval-sha256 }}
+    steps:
+      - name: Validate trusted workflow identity and trigger
+        id: trusted
+        env:
+          JOB_CONTEXT: ${{ toJSON(job) }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, re
+          context = json.loads(os.environ["JOB_CONTEXT"])
+          assert context.get("workflow_repository") == "brianluby/armorer-workflows", "Unsupported workflow source"
+          sha = context.get("workflow_sha", "")
+          assert re.fullmatch(r"[0-9a-f]{40}", sha), "Missing immutable reusable workflow source identity"
+          assert os.environ["EVENT_NAME"] in ("push", "workflow_dispatch"), "Unsupported signing trigger"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("sha=" + sha + "\n")
+          PY
+      - name: Checkout trusted runtime at the executing workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer-workflows
+          ref: ${{ steps.trusted.outputs.sha }}
+          path: runtime-source
+          persist-credentials: false
+      - name: Download the unsigned build-v3 handoffs from this exact run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: '*-handoff-v3-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}'
+          path: ${{ runner.temp }}/armorer-sign/handoffs
+      - name: Prepare the credential-free signing plan
+        env:
+          ARMORER_SIGN_WORKFLOW_COMMIT: ${{ steps.trusted.outputs.sha }}
+          ARMORER_RUNNER_IMAGE: ${{ runner.os }}-${{ runner.arch }}
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/armorer-sign/work"
+          mkdir -p "$work"
+          echo "WORK=$work" >> "$GITHUB_ENV"
+          echo "HANDOFFS=$RUNNER_TEMP/armorer-sign/handoffs" >> "$GITHUB_ENV"
+          echo "PLAN=$RUNNER_TEMP/armorer-sign/plan.json" >> "$GITHUB_ENV"
+          python3 -I - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "runtime-source"))
+          from armorer_runtime.release_signing_v1 import main
+          sys.argv = ["release-signing", "prepare",
+                      "--approval", os.environ["APPROVAL"],
+                      "--approval-sha256", os.environ["APPROVAL_SHA256"],
+                      "--handoffs", os.environ["HANDOFFS"],
+                      "--work", os.environ["WORK"],
+                      "--output", os.environ["PLAN"]]
+          main()
+          PY
+      - name: Import signing identity and notarization credentials
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          : "${APPLE_CERTIFICATE_P12_BASE64:?Missing signing certificate secret}"
+          : "${APPLE_CERTIFICATE_PASSWORD:?Missing certificate password secret}"
+          : "${APPLE_ID:?Missing Apple account secret}"
+          : "${APPLE_APP_SPECIFIC_PASSWORD:?Missing notarization password secret}"
+          keychain="$WORK/signing.keychain-db"
+          keychain_password=$(openssl rand -hex 32)
+          echo "::add-mask::$keychain_password"
+          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          # The keychain stays unlocked (-lut 1800); only its path is shared. The random password
+          # is never exported, so no credential material persists into later steps or the env file.
+          printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$WORK/certificate.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 1800 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$WORK/certificate.p12" -k "$keychain" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          # Read the approved team/identity from the plan, never from a caller input.
+          team_id=$(python3 -I -c 'import json,os;print(json.load(open(os.environ["PLAN"]))["rows"][0]["team_id"])')
+          xcrun notarytool store-credentials ci-notary --keychain "$keychain" \
+            --apple-id "$APPLE_ID" --team-id "$team_id" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD"
+          rm -f "$WORK/certificate.p12"
+      - name: Sign and notarize each approved Apple executable
+        run: |
+          set -euo pipefail
+          umask 077
+          signed="$RUNNER_TEMP/armorer-sign/signed"
+          mkdir -p "$signed"
+          echo "SIGNED=$signed" >> "$GITHUB_ENV"
+          # The plan rows are the only authority for names, binaries and identity.
+          python3 -I - <<'PY'
+          import json, os, pathlib, subprocess, tarfile
+          work = pathlib.Path(os.environ["WORK"])
+          signed = pathlib.Path(os.environ["SIGNED"])
+          keychain = os.environ["KEYCHAIN"]
+          plan = json.loads(pathlib.Path(os.environ["PLAN"]).read_bytes())
+          for row in plan["rows"]:
+              key, binary = row["key"], row["binary"]
+              identity, team = row["signing_identity"], row["team_id"]
+              payload = work / ("payload-" + key)
+              payload.mkdir(mode=0o700)
+              with tarfile.open(work / row["archive_name"], "r:gz") as source:
+                  source.extractall(payload)
+              executable = payload / row["binary_path"]
+              subprocess.run(["codesign", "--force", "--timestamp", "--options", "runtime",
+                              "--keychain", keychain, "--sign", identity, str(executable)], check=True)
+              subprocess.run(["codesign", "--verify", "--strict", "--verbose=2", str(executable)], check=True)
+              description = subprocess.run(["codesign", "--display", "--verbose=4", str(executable)],
+                                           check=True, capture_output=True, text=True).stderr
+              if "TeamIdentifier=" + team + "\n" not in description:
+                  raise SystemExit("Signing team does not match the approved team")
+              submission_zip = work / (key + "-submission.zip")
+              subprocess.run(["ditto", "-c", "-k", str(payload), str(submission_zip)], check=True)
+              staging = work / key
+              staging.mkdir(mode=0o700, exist_ok=True)
+              submission = staging / "submission.json"
+              with submission.open("wb") as out:
+                  subprocess.run(["xcrun", "notarytool", "submit", str(submission_zip),
+                                  "--keychain-profile", "ci-notary", "--keychain", keychain,
+                                  "--wait", "--timeout", "20m", "--output-format", "json",
+                                  "--no-progress"], check=True, stdout=out)
+              result = json.loads(submission.read_bytes())
+              if not result.get("id"):
+                  raise SystemExit("Apple returned no notarization submission id")
+              subprocess.run(["xcrun", "notarytool", "log", result["id"],
+                              "--keychain-profile", "ci-notary", "--keychain", keychain,
+                              str(staging / "notarization.json")], check=True)
+              if result.get("status") != "Accepted":
+                  raise SystemExit("Apple did not accept the archive; signing blocked")
+              subprocess.run(["codesign", "--verify", "--strict", "--check-notarization",
+                              "-R=notarized", str(executable)], check=True)
+              # Repackage the exact notarized package directory for the finalize step.
+              subprocess.run(["tar", "-C", str(payload), "-czf",
+                              str(signed / row["archive_name"]), "pkg"], check=True)
+          PY
+      - name: Finalize the signed release and evidence chain
+        env:
+          ARMORER_SIGN_WORKFLOW_COMMIT: ${{ steps.trusted.outputs.sha }}
+          ARMORER_RUNNER_IMAGE: ${{ runner.os }}-${{ runner.arch }}
+        run: |
+          set -euo pipefail
+          umask 077
+          echo "FINALIZED=$RUNNER_TEMP/armorer-sign/finalized.json" >> "$GITHUB_ENV"
+          python3 -I - > "$RUNNER_TEMP/armorer-sign/finalized.json" <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "runtime-source"))
+          from armorer_runtime.release_signing_v1 import main
+          sys.argv = ["release-signing", "finalize",
+                      "--approval", os.environ["APPROVAL"],
+                      "--approval-sha256", os.environ["APPROVAL_SHA256"],
+                      "--plan", os.environ["PLAN"],
+                      "--signed", os.environ["SIGNED"],
+                      "--work", os.environ["WORK"]]
+          main()
+          PY
+      - name: Assemble the signed release set with carried-forward SBOMs
+        run: |
+          set -euo pipefail
+          umask 077
+          release="$RUNNER_TEMP/armorer-sign/release"
+          mkdir -p "$release"
+          echo "RELEASE=$release" >> "$GITHUB_ENV"
+          python3 -I - <<'PY'
+          import json, os, pathlib, shutil
+          work = pathlib.Path(os.environ["WORK"])
+          handoffs = pathlib.Path(os.environ["HANDOFFS"])
+          release = pathlib.Path(os.environ["RELEASE"])
+          plan = json.loads(pathlib.Path(os.environ["PLAN"]).read_bytes())
+          # finalize's result is the only authority for the produced release archive names.
+          finalized = json.loads(pathlib.Path(os.environ["FINALIZED"]).read_bytes())
+          run = plan["run"]
+          for row in plan["rows"]:
+              key = row["key"]
+              archive = finalized["results"][key]["release_archive"]
+              shutil.copyfile(work / archive, release / archive)
+              shutil.copyfile(work / (key + ".build.json"), release / (key + ".build.json"))
+              # Carry the verified unsigned-build SBOM forward unchanged; verify binds its digest.
+              handoff = handoffs / (key + "-handoff-v3-run-" + str(run["id"]) + "-attempt-" + str(run["attempt"]))
+              shutil.copyfile(handoff / (key + ".cdx.json"), release / (key + ".cdx.json"))
+          shutil.copyfile(pathlib.Path(os.environ["PLAN"]), release / "plan.json")
+          PY
+      - name: Upload the exact signed release set
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-release-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/armorer-sign/release/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove temporary credentials
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -n "${KEYCHAIN:-}" ] && [ -f "$KEYCHAIN" ]; then
+            security delete-keychain "$KEYCHAIN" || true
+          fi
+          rm -f "$WORK/certificate.p12"

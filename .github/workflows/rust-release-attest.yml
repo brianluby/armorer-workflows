@@ -1,0 +1,183 @@
+name: Armorer release attestation producer v1
+
+# Reusable attestation producer over FINAL SIGNED bytes only. Inert until the caller supplies the
+# digest-pinned signing approval and the signed release set from rust-release-sign.yml in this same
+# run. Unsigned payloads are rejected by the credential-free verify stage before any attestation
+# subject is exposed. No publication, tag or release authority exists here.
+#
+# actions/attest v4.2.0 semantics (verified from the pinned action manifest): provenance is the
+# DEFAULT mode when neither sbom-path nor predicate inputs are given; sbom-path creates an SBOM
+# attestation and is MUTUALLY EXCLUSIVE with predicate-type/predicate/predicate-path. The two
+# attestations therefore require two separate invocations, never one combined call.
+on:
+  workflow_call:
+    inputs:
+      approval:
+        description: Absolute path to the independently reviewed signing approval file
+        required: true
+        type: string
+      approval-sha256:
+        description: Independently approved SHA-256 of the exact approval bytes
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # Credential-free read-only guard: admit only the exact finalized signed bytes.
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.subjects.outputs.matrix }}
+    env:
+      NODE_OPTIONS: ''
+      PYTHONPATH: ''
+      PYTHONHOME: ''
+      LD_PRELOAD: ''
+      LD_LIBRARY_PATH: ''
+      LD_AUDIT: ''
+      DYLD_INSERT_LIBRARIES: ''
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      ALL_PROXY: ''
+      NO_PROXY: ''
+      APPROVAL: ${{ inputs.approval }}
+      APPROVAL_SHA256: ${{ inputs.approval-sha256 }}
+    steps:
+      - name: Validate trusted workflow identity and trigger
+        id: trusted
+        env:
+          JOB_CONTEXT: ${{ toJSON(job) }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, re
+          context = json.loads(os.environ["JOB_CONTEXT"])
+          assert context.get("workflow_repository") == "brianluby/armorer-workflows", "Unsupported workflow source"
+          sha = context.get("workflow_sha", "")
+          assert re.fullmatch(r"[0-9a-f]{40}", sha), "Missing immutable reusable workflow source identity"
+          assert os.environ["EVENT_NAME"] in ("push", "workflow_dispatch"), "Unsupported attestation trigger"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("sha=" + sha + "\n")
+          PY
+      - name: Checkout trusted runtime at the executing workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianluby/armorer-workflows
+          ref: ${{ steps.trusted.outputs.sha }}
+          path: runtime-source
+          persist-credentials: false
+      - name: Download the finalized signed release set from this exact run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-release-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/armorer-attest/release
+      - name: Verify the exact signed bytes and derive the attestation subjects
+        id: subjects
+        run: |
+          set -euo pipefail
+          release="$RUNNER_TEMP/armorer-attest/release"
+          echo "RELEASE=$release" >> "$GITHUB_ENV"
+          python3 -I - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "runtime-source"))
+          from armorer_runtime.release_signing_v1 import main
+          release = os.environ["RELEASE"]
+          # verify binds the approval to the signing commit the plan claims, because this job
+          # executes a different workflow commit than the signing job did.
+          sys.argv = ["release-signing", "verify",
+                      "--approval", os.environ["APPROVAL"],
+                      "--approval-sha256", os.environ["APPROVAL_SHA256"],
+                      "--plan", str(Path(release) / "plan.json"),
+                      "--signed", release,
+                      "--work", release]
+          main()
+          PY
+          python3 -I - <<'PY'
+          import json, os, pathlib
+          release = pathlib.Path(os.environ["RELEASE"])
+          plan = json.loads((release / "plan.json").read_bytes())
+          keys = [row["key"] for row in plan["rows"]]
+          matrix = {"include": [{"key": key} for key in keys]}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("matrix=" + json.dumps(matrix, sort_keys=True) + "\n")
+          PY
+      - name: Retain the verified signed release set for the attestation jobs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-release-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/armorer-attest/release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  attest:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.verify.outputs.matrix) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Only this job mints attestation authority; everything else stays contents: read.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      NODE_OPTIONS: ''
+      PYTHONPATH: ''
+      PYTHONHOME: ''
+      LD_PRELOAD: ''
+      LD_LIBRARY_PATH: ''
+      LD_AUDIT: ''
+      DYLD_INSERT_LIBRARIES: ''
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      ALL_PROXY: ''
+      NO_PROXY: ''
+      KEY: ${{ matrix.key }}
+    steps:
+      - name: Download the verified signed release set
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-release-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/armorer-attest/release
+      - name: Resolve the exact final subject paths from the verified plan
+        id: subject
+        run: |
+          set -euo pipefail
+          python3 -I - <<'PY'
+          import json, os, pathlib
+          release = pathlib.Path(os.environ["RUNNER_TEMP"]) / "armorer-attest/release"
+          plan = json.loads((release / "plan.json").read_bytes())
+          key = os.environ["KEY"]
+          row = next(row for row in plan["rows"] if row["key"] == key)
+          archive = release / (key + "-signed-release-v1.tar.gz")
+          sbom = release / (key + ".cdx.json")
+          evidence = release / (key + ".build.json")
+          for path in (archive, sbom, evidence):
+              if not path.is_file() or path.is_symlink():
+                  raise SystemExit("verified release leaf missing")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("archive=" + str(archive) + "\n")
+              output.write("sbom=" + str(sbom) + "\n")
+              output.write("evidence=" + str(evidence) + "\n")
+          PY
+      # Default mode: no sbom-path and no predicate inputs -> SLSA build provenance over the
+      # final signed archive and its authenticated consumer evidence.
+      - name: Attest SLSA build provenance for the final signed release
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: |
+            ${{ steps.subject.outputs.archive }}
+            ${{ steps.subject.outputs.evidence }}
+      # Separate invocation: sbom-path cannot be combined with predicate inputs.
+      - name: Attest the carried-forward CycloneDX SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          sbom-path: ${{ steps.subject.outputs.sbom }}
