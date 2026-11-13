@@ -1,5 +1,5 @@
 """Qualify actual fixed native GETs without signing, payload execution or publication."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import os
@@ -77,55 +77,116 @@ def _state(value):
             ("success", "failure", "neutral", "cancelled", "skipped", "timed_out", "action_required", "stale") else "unsupported")
 
 
-def _ready(api, route, expected):
-    """Wait at most thirty seconds for matching pending metadata; never qualify it or download before readiness."""
-    deadline = min(api._deadline, time.monotonic() + 30)
+def _attempt_ready(api, route, expected):
+    """Wait for THIS attempt's own provider metadata before any qualification or download.
+
+    The run-level record can still report the previous attempt's state, so polling it expired
+    spuriously under load. Poll the exact attempt route instead, with a generous propagation
+    budget that is still bounded by the native stage deadline.
+    """
+    endpoint = route + f"/attempts/{expected.run_attempt}"
+    deadline = min(api._deadline, time.monotonic() + 180)
     while True:
-        latest = api.json(route)
-        state = _state(latest)
+        record = api.json(endpoint)
+        state = _state(record)
         print(json.dumps({"state": "native-provider-preflight", "run_id": expected.run_id,
+                          "run_attempt": expected.run_attempt,
                           "provider_status": state[0], "provider_conclusion": state[1]}), flush=True)
-        start = _run(latest, expected, int(time.time()), active=False)
+        start = _run(record, expected, int(time.time()), active=False)
         require(time.monotonic() < deadline, "native qualification provider readiness deadline expired")
         if start is not None:
             return start
         time.sleep(min(2, max(0, deadline - time.monotonic())))
 
 
+def _attempt_sets(api, route, expected):
+    """Partition the run's retained artifacts into complete single-attempt sets.
+
+    Artifacts carry no attempt field, so the producing attempt comes from the fixed upload name.
+    A partial rerun keeps the earlier attempt's set; a full rerun keeps both. Sets that are not
+    exactly this run's three runner names are ignored rather than partially trusted.
+    """
+    listing = api.json(route + "/artifacts?per_page=100")
+    rows = listing.get("artifacts")
+    require(type(listing.get("total_count")) is int and isinstance(rows, list) and
+            listing["total_count"] == len(rows) and len(rows) <= 100,
+            "incomplete or extra provider artifact set")
+    sets = {}
+    for row in rows:
+        require(isinstance(row, dict) and isinstance(row.get("name"), str), "invalid provider artifact row")
+        matched = None
+        for runner in RUNNERS:
+            prefix = f"policy-native-v1-{runner}-{expected.run_id}-"
+            if row["name"].startswith(prefix) and row["name"][len(prefix):].isdigit():
+                matched = (runner, int(row["name"][len(prefix):]))
+                break
+        if matched is None:
+            continue
+        runner, attempt = matched
+        require(0 < attempt <= expected.run_attempt, "provider artifact attempt is outside this run")
+        group = sets.setdefault(attempt, {})
+        require(runner not in group, "duplicate provider artifact for one runner attempt")
+        group[runner] = row
+    complete = {attempt: group for attempt, group in sets.items() if set(group) == set(RUNNERS)}
+    require(complete, "no complete provider artifact set for this run")
+    return complete
+
+
+def _producing_attempt(api, route, expected, now):
+    """Select the newest complete set and bind it to its own independently read attempt record.
+
+    The byte window must start at the PRODUCING attempt: on a partial rerun the retained
+    artifacts predate the current attempt, so binding them to the current start would reject
+    genuine bytes. The producer attempt may itself have failed elsewhere in the run; only its
+    identity, source and freshness are required here, never a success claim.
+    """
+    complete = _attempt_sets(api, route, expected)
+    attempt = max(complete)
+    producer = replace(expected, run_attempt=attempt)
+    start = _run(api.json(route + f"/attempts/{attempt}"), producer, now, active=False)
+    require(start is not None, "native qualification producer attempt is not ready")
+    return attempt, producer, start, complete[attempt]
+
+
 def qualify(api, expected, distribution):
     """Recheck three actual qualification archive identities using the existing bounded fixed native adapter."""
     require(type(api) is QualifiedGhApi and type(expected) is ExpectedRead, "native qualification adapter or intent invalid")
     expected.validate()
-    names = {f"policy-native-v1-{runner}-{expected.run_id}-{expected.run_attempt}" for runner in RUNNERS}
     route = f"repos/{expected.repository}/actions/runs/{expected.run_id}"
-    start = _ready(api, route, expected)
+    current_start = _attempt_ready(api, route, expected)
     now = int(time.time())
-    require(_run(api.json(route + f"/attempts/{expected.run_attempt}"), expected, now) == start, "native qualification attempts differ")
-    records = _listing(api.json(route + "/artifacts?per_page=100"), expected, names, start, now)
+    attempt, producer, start, group = _producing_attempt(api, route, expected, now)
+    names = {row["name"] for row in group.values()}
+    listing = {"total_count": len(group), "artifacts": list(group.values())}
+    records = _listing(listing, producer, names, start, now)
     observed = {}
     with tempfile.TemporaryDirectory(prefix="armorer-native-get-qualification-") as temporary:
         for name, record in sorted(records.items()):
             require(record["size_in_bytes"] <= MAX_QUALIFICATION_ARCHIVE, "native qualification archive exceeds bound")
             detail = api.json(f"repos/{expected.repository}/actions/artifacts/{record['id']}")
-            require(_artifact(detail, expected, name, start, int(time.time())) == record, "native qualification artifact detail changed")
+            require(_artifact(detail, producer, name, start, int(time.time())) == record, "native qualification artifact detail changed")
             archive = Path(temporary) / (str(record["id"]) + ".zip")
             api.archive(expected.repository, record["id"], archive)
             identity = _identity(archive, MAX_QUALIFICATION_ARCHIVE)
             require(identity == {"size": record["size_in_bytes"], "sha256": record["digest"][7:]}, "native qualification archive bytes mismatch")
             observed[name] = {"provider": record, "archive": identity}
-        latest = api.json(route)
-        attempt = api.json(route + f"/attempts/{expected.run_attempt}")
-        listing = api.json(route + "/artifacts?per_page=100")
         final_now = int(time.time())
-        require(final_now >= now and time.monotonic() < api._deadline and
-                _run(latest, expected, final_now) == start and _run(attempt, expected, final_now) == start and
-                _listing(listing, expected, names, start, final_now) == records, "native qualification provider state changed")
+        attempt_record = api.json(route + f"/attempts/{expected.run_attempt}")
+        require(_run(attempt_record, expected, final_now) == current_start, "native qualification attempt changed")
+        require(_run(api.json(route + f"/attempts/{attempt}"), producer, final_now, active=False) == start,
+                "native qualification producer attempt changed")
+        final_group = _producing_attempt(api, route, expected, final_now)
+        require(final_group[0] == attempt and final_group[2] == start,
+                "native qualification producing attempt changed")
+        require(_listing({"total_count": len(final_group[3]), "artifacts": list(final_group[3].values())},
+                         producer, names, start, final_now) == records,
+                "native qualification provider artifacts changed")
     return {"schema_version": 1, "state": "native-get-adapter-qualified", "distribution": distribution,
             "authentication_mode": "operator-readonly-qualification" if api._operator else "isolated-workflow-token",
             "repository": expected.repository, "repository_id": expected.repository_id,
-            "head_commit": expected.head_commit, "head_branch": expected.head_branch, "event": expected.event,
-            "run_id": expected.run_id, "run_attempt": expected.run_attempt, "workflow_id": WORKFLOW_ID,
-            "caller_path": CALLER_PATH, "observed_at": final_now, "artifacts": observed,
+            "run_id": expected.run_id, "run_attempt": expected.run_attempt,
+            "artifact_run_attempt": attempt, "observed_at": final_now, "artifacts": observed,
+            "workflow_id": WORKFLOW_ID, "caller_path": CALLER_PATH,
             "payload_decoded": False, "artifact_executed": False, "producer_job_authenticated": False,
             "signing_authorized": False, "cryptographic_release_authenticated": False,
             "policy_snapshot_authenticated": False, "production_catalog_accepted": False}
