@@ -68,3 +68,16 @@ complete v3 handoff set and checks ARM64 Mach-O structure before a later signing
 stage can use its readonly bytes. Native Cargo qualification retains measured
 input identities; protected signing, notarization and final attestations remain
 required.
+
+The [release controller](docs/release-controller-v1.md) binds its exact
+run/attempt in a deployment before any publication write, so the consumer can
+observe current-attempt environment enforcement and runner-wide serialization.
+It stays inert without independently approved policy and approvals, and grants
+no signing or attestation authority.
+
+The [protected signing and attestation producers](docs/release-signing-v1.md)
+complete the Apple chain: a caller-owned `release-signing` environment signs and
+notarizes the exact approved executables, then a credential-free verify stage
+admits only those finalized bytes before separate provenance and SBOM
+attestations. Both stay inert without a digest-pinned approval and named
+credentials; publication and the real signed rehearsal remain separate gates.
