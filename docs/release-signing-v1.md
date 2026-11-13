@@ -80,8 +80,11 @@ executables in v0.1: that module rejects any non-library selection targeting
 slots. This workflow therefore does not invent an inventory subject for signed
 Apple bytes; joining the signed set into a release inventory is the
 controller's reviewed step, and the consumer validates that inventory against
-its own bundle. Do not attest unsigned bytes or a fabricated inventory to
-close that gap.
+its own bundle. The names here are staging names
+(`<key>-signed-release-v1.tar.gz`), not the consumer's release asset names
+(`<key>.tar.gz` + `<key>.apple.json`, `src/verification/apple.rs`); that join
+must rename and re-inventory, never re-sign. Do not attest unsigned bytes or a
+fabricated inventory to close that gap.
 
 ## Pins
 
