@@ -70,8 +70,8 @@ before any subject path is exposed.
 
 ### Attestation subjects and the inventory boundary
 
-The subjects here are the final signed archive, its authenticated consumer
-evidence (`<key>.build.json`) and the carried-forward CycloneDX SBOM. The
+The subjects here are the final signed archive, its Apple transformation
+evidence (`<key>.apple.json`) and the carried-forward CycloneDX SBOM. The
 release-level **authenticated inventory** (`armorer-release-inventory.json`
 plus its provenance bundle) is a separate stage owned by
 `armorer_runtime.final_payload_v1`, and it deliberately cannot represent Apple

@@ -264,7 +264,7 @@ jobs:
               key = row["key"]
               archive = finalized["results"][key]["release_archive"]
               shutil.copyfile(work / archive, release / archive)
-              shutil.copyfile(work / (key + ".build.json"), release / (key + ".build.json"))
+              shutil.copyfile(work / (key + ".apple.json"), release / (key + ".apple.json"))
               # Carry the verified unsigned-build SBOM forward unchanged; verify binds its digest.
               handoff = handoffs / (key + "-handoff-v3-run-" + str(run["id"]) + "-attempt-" + str(run["attempt"]))
               shutil.copyfile(handoff / (key + ".cdx.json"), release / (key + ".cdx.json"))

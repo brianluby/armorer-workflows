@@ -433,7 +433,9 @@ def finalize_signing(*, approval: SigningApproval, plan: dict, work: Path, signe
                                   handoff={"observed_build": observed}, notarization_log=notarization_log,
                                   submission=submission, notarization=notarization, platform=platform,
                                   tools=tools, runner_image=runner_image, recorded_at=recorded_at)
-        (work / (key + ".build.json")).write_bytes(evidence)
+        # The consumer reads Apple transformation evidence from <key>.apple.json; .build.json is
+        # the separate BuildEvidence role, which must carry no Apple assertions.
+        (work / (key + ".apple.json")).write_bytes(evidence)
         results[key] = {"final": final, "signed_binary": signed_binary,
                         "release_artifact": key + SIGNED_RELEASE_SUFFIX,
                         "release_archive": final_path.name}

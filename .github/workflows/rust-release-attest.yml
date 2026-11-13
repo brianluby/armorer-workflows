@@ -159,7 +159,7 @@ jobs:
           row = next(row for row in plan["rows"] if row["key"] == key)
           archive = release / (key + "-signed-release-v1.tar.gz")
           sbom = release / (key + ".cdx.json")
-          evidence = release / (key + ".build.json")
+          evidence = release / (key + ".apple.json")
           for path in (archive, sbom, evidence):
               if not path.is_file() or path.is_symlink():
                   raise SystemExit("verified release leaf missing")

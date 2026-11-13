@@ -1,8 +1,8 @@
 """Adversarial release-signing handoff tests; inert synthetic bytes, no live signing/OIDC/network.
 
-These exercise the credential-free pure functions and the early approval guards. finalize_signing
-invokes real codesign/notarytool and is intentionally out of scope here; the canonical repackaging,
-extraction, matrix derivation and verify-stage byte binding are fully testable without credentials.
+These exercise the credential-free pure functions and the early approval guards. The full
+finalize -> verify chain is covered with only the platform-measurement boundary mocked, so no
+codesign/notarytool, credential, OIDC or network access occurs.
 """
 import gzip
 import hashlib
@@ -13,6 +13,7 @@ import tarfile
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 from armorer_runtime import release_signing_v1 as signing
 from armorer_runtime.build_v3 import MAX_ARTIFACT
@@ -229,6 +230,109 @@ class VerifyGuardTests(unittest.TestCase):
             plan["run"] = {"id": 999, "attempt": 2}
             with self.assertRaises(Failure):
                 signing.verify_signed_release(approval=permit, plan=plan, release_directory=release)
+
+
+class FinalizeChainTests(unittest.TestCase):
+    """Exercise finalize -> verify end to end; only Apple platform measurement is mocked.
+
+    Regression scope: the pre-staged evidence directory, the consumer-canonical single-leaf
+    release archive, and the <key>.apple.json transformation-evidence name.
+    """
+
+    KEY = "app--aarch64-apple-darwin--minimal"
+
+    def permit(self):
+        selection = {"id": "app", "profile": "cli", "package": "app", "binary": "app",
+                     "target": "aarch64-apple-darwin", "targets": ["aarch64-apple-darwin"],
+                     "feature_set": "minimal", "default_features": False, "features": [],
+                     "runner": "macos-15", "artifact_id": self.KEY, "toolchain": "1.95.0"}
+        item = signing.PayloadExpectation(selection=selection, context={}, input_sha256={},
+                                          root_component_name="app", package_version="0.1.0",
+                                          tool_sha256={})
+        run = SimpleNamespace(run_id=17, run_attempt=2, runtime_commit="b" * 40)
+        inputs = {"source": {"repository": "brianluby/armorer-test", "commit": "a" * 40,
+                             "git_ref": "refs/tags/v0.1.0"},
+                  "config_sha256": "1" * 64, "lock_sha256": "2" * 64, "cargo_lock_sha256": "3" * 64,
+                  "runtime": {"sha256": "4" * 64, "size": 100}, "runtime_version": "0.1.0",
+                  "run": {"id": 17, "attempt": 2}}
+        catalog = {"catalog": {"sha256": "5" * 64, "size": 10},
+                   "identity": {"sha256": "6" * 64, "size": 20}}
+        return signing.SigningApproval(
+            run=run, items=(item,), apple_items=(item,), inputs=inputs, catalog=catalog,
+            build_inputs=(), team_id="DVH6X33J83",
+            signing_identity="Developer ID Application: Test (DVH6X33J83)",
+            signing_workflow_commit="a" * 40, max_age_seconds=3600)
+
+    def stage(self, root, permit, signed_bytes):
+        """Reproduce exactly what the gated credential step leaves behind before finalize."""
+        work = root / "work"
+        work.mkdir()
+        signed = root / "signed"
+        signed.mkdir()
+        unsigned_bytes = b"unsigned macho bytes"
+        sbom_bytes = b'{"bomFormat": "CycloneDX"}'
+        staged = work / (self.KEY + ".tar.gz")
+        staged.write_bytes(gz_tar([("pkg", None), ("pkg/app", unsigned_bytes)]))
+        (signed / (self.KEY + ".tar.gz")).write_bytes(gz_tar([("pkg", None), ("pkg/app", signed_bytes)]))
+        # The gated step pre-creates work/<key>/ to hold Apple's acceptance records.
+        staging = work / self.KEY
+        staging.mkdir(mode=0o700)
+        acceptance = {"id": "submission-1", "status": "Accepted", "createdDate": "2020-01-01T00:00:00.000Z"}
+        (staging / "submission.json").write_bytes(json.dumps(acceptance).encode())
+        (staging / "notarization.json").write_bytes(json.dumps(
+            {"jobId": "submission-1", "status": "Accepted", "uploadDate": "2020-01-01T00:01:00.000Z"}).encode())
+        row = dict(signing.signing_matrix(permit)[0])
+        row.update(unsigned=identity(unsigned_bytes), archive=identity(staged.read_bytes()),
+                   sbom=identity(sbom_bytes),
+                   observed_build={"started_at": 1577836800, "finished_at": 1577836800})
+        plan = {"schema_version": 1, "state": signing.SIGNING_PLAN_NAME,
+                "signing_workflow_commit": permit.signing_workflow_commit,
+                "run": {"id": 17, "attempt": 2}, "rows": [row]}
+        return work, signed, plan, sbom_bytes
+
+    def finalize(self, work, signed, plan, permit):
+        certificate = {"sha256": "7" * 64, "size": 32}
+        tool = {"name": "codesign", "kind": "tool", "version": "hosted-image",
+                "bytes": certificate, "authentication_record": certificate,
+                "observed_at": 1577836800, "max_age_seconds": None}
+        with mock.patch.object(signing, "signing_platform_evidence",
+                               return_value={"certificate_sha256": "7" * 64, "certificate": certificate}), \
+             mock.patch.object(signing, "_tool_observation", return_value=tool):
+            return signing.finalize_signing(approval=permit, plan=plan, work=work,
+                                            signed_directory=signed, runner_image="macos-15-test")
+
+    def test_finalize_emits_apple_evidence_and_the_release_verifies(self):
+        permit = self.permit()
+        signed_bytes = b"final signed macho bytes"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            work, signed, plan, sbom_bytes = self.stage(root, permit, signed_bytes)
+            result = self.finalize(work, signed, plan, permit)
+            # Apple transformation evidence uses the consumer's .apple.json role, never .build.json.
+            self.assertTrue((work / (self.KEY + ".apple.json")).is_file())
+            self.assertFalse((work / (self.KEY + ".build.json")).exists())
+            evidence = json.loads((work / (self.KEY + ".apple.json")).read_bytes())
+            self.assertIsNotNone(evidence["apple_assertions"])
+            # Assemble the release set exactly as the workflow does, then verify it.
+            release = root / "release"
+            release.mkdir()
+            archive = result["results"][self.KEY]["release_archive"]
+            (release / archive).write_bytes((work / archive).read_bytes())
+            (release / (self.KEY + ".cdx.json")).write_bytes(sbom_bytes)
+            plan["rows"][0].update(final=result["results"][self.KEY]["final"],
+                                   signed_binary=result["results"][self.KEY]["signed_binary"])
+            verified = signing.verify_signed_release(approval=permit, plan=plan, release_directory=release)
+            self.assertEqual(verified["state"], "release-signing-verified")
+            self.assertEqual(verified["subjects"][self.KEY]["final"], result["results"][self.KEY]["final"])
+
+    def test_finalize_rejects_unchanged_bytes_after_signing(self):
+        permit = self.permit()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            # Identical unsigned and "signed" bytes must fail: signing has to change the executable.
+            work, signed, plan, _ = self.stage(root, permit, b"unsigned macho bytes")
+            with self.assertRaises(Failure):
+                self.finalize(work, signed, plan, permit)
 
 
 if __name__ == "__main__":
